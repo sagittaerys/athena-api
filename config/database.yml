@@ -1,0 +1,41 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: athena_api_development
+  username: <%= ENV["DB_USERNAME"] %>
+  password: <%= ENV["DB_PASSWORD"] %>
+  host: <%= ENV["DB_HOST"] %>
+  port: <%= ENV["DB_PORT"] %>
+
+test:
+  <<: *default
+  database: athena_api_test
+  username: <%= ENV["DB_USERNAME"] %>
+  password: <%= ENV["DB_PASSWORD"] %>
+  host: <%= ENV["DB_HOST"] %>
+  port: <%= ENV["DB_PORT"] %>
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: athena_api_production
+    username: <%= ENV["DB_USERNAME"] %>
+    password: <%= ENV["DB_PASSWORD"] %>
+    host: <%= ENV["DB_HOST"] %>
+    port: <%= ENV["DB_PORT"] %>
+  cache:
+    <<: *primary_production
+    database: athena_api_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: athena_api_production_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_production
+    database: athena_api_production_cable
+    migrations_paths: db/cable_migrate

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_19_125316) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_19_131351) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -26,6 +26,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_125316) do
     t.bigint "user_id", null: false
     t.index ["user_id", "external_id"], name: "index_library_items_on_user_id_and_external_id", unique: true
     t.index ["user_id"], name: "index_library_items_on_user_id"
+  end
+
+  create_table "reading_progresses", force: :cascade do |t|
+    t.boolean "completed", default: false, null: false
+    t.datetime "created_at", null: false
+    t.integer "current_chapter", default: 0, null: false
+    t.datetime "last_read_at"
+    t.bigint "library_item_id", null: false
+    t.float "position_seconds", default: 0.0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["library_item_id"], name: "index_reading_progresses_on_library_item_id"
+    t.index ["user_id", "library_item_id"], name: "index_reading_progresses_on_user_id_and_library_item_id", unique: true
+    t.index ["user_id"], name: "index_reading_progresses_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -49,5 +63,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_125316) do
   end
 
   add_foreign_key "library_items", "users"
+  add_foreign_key "reading_progresses", "library_items"
+  add_foreign_key "reading_progresses", "users"
   add_foreign_key "voice_profiles", "users"
 end

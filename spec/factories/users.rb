@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :user do
-    email { Faker::Internet.unique.email }
-    username { "#{Faker::Internet.username(specifier: 3..20).gsub(/[^a-zA-Z0-9_]/, '_')}" }
-    password_digest { "password123" }
+    sequence(:email) { |n| "user#{n}@athena.com" }
+    sequence(:username) { |n| "user_#{n}" }
+    password { "password123" }
   end
 end

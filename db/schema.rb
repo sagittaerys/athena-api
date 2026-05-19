@@ -10,9 +10,24 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_19_131351) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_19_133127) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "audio_chunks", force: :cascade do |t|
+    t.string "audio_url"
+    t.integer "chapter_index", null: false
+    t.integer "chunk_index", null: false
+    t.datetime "created_at", null: false
+    t.bigint "library_item_id", null: false
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["library_item_id"], name: "index_audio_chunks_on_library_item_id"
+    t.index ["user_id", "library_item_id", "chapter_index", "chunk_index"], name: "index_audio_chunks_uniqueness", unique: true
+    t.index ["user_id", "library_item_id", "chapter_index"], name: "idx_on_user_id_library_item_id_chapter_index_cc150b7db1"
+    t.index ["user_id"], name: "index_audio_chunks_on_user_id"
+  end
 
   create_table "library_items", force: :cascade do |t|
     t.string "author"
@@ -62,6 +77,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_131351) do
     t.index ["user_id"], name: "index_voice_profiles_on_user_id"
   end
 
+  add_foreign_key "audio_chunks", "library_items"
+  add_foreign_key "audio_chunks", "users"
   add_foreign_key "library_items", "users"
   add_foreign_key "reading_progresses", "library_items"
   add_foreign_key "reading_progresses", "users"

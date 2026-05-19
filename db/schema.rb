@@ -10,9 +10,23 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_19_113521) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_19_125316) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "library_items", force: :cascade do |t|
+    t.string "author"
+    t.string "cover_url"
+    t.datetime "created_at", null: false
+    t.string "epub_url"
+    t.string "external_id"
+    t.string "source", null: false
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id", "external_id"], name: "index_library_items_on_user_id_and_external_id", unique: true
+    t.index ["user_id"], name: "index_library_items_on_user_id"
+  end
 
   create_table "users", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -34,5 +48,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_19_113521) do
     t.index ["user_id"], name: "index_voice_profiles_on_user_id"
   end
 
+  add_foreign_key "library_items", "users"
   add_foreign_key "voice_profiles", "users"
 end

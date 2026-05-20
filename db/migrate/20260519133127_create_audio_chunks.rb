@@ -11,8 +11,8 @@ class CreateAudioChunks < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :audio_chunks, [:user_id, :library_item_id, :chapter_index]
-    add_index :audio_chunks, [:user_id, :library_item_id, :chapter_index, :chunk_index],
+    add_index :audio_chunks, [ :user_id, :library_item_id, :chapter_index ]
+    add_index :audio_chunks, [ :user_id, :library_item_id, :chapter_index, :chunk_index ],
               unique: true,
               name: "index_audio_chunks_uniqueness"
   end

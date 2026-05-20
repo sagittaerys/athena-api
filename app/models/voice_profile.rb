@@ -5,19 +5,19 @@ class VoiceProfile < ApplicationRecord
 
   validates :status, inclusion: { in: STATUSES }
 
-  scope :ready, -> { where(status: 'ready') }
-  scope :pending, -> { where(status: 'pending') }
-  scope :failed, -> { where(status: 'failed') }
+  scope :ready, -> { where(status: "ready") }
+  scope :pending, -> { where(status: "pending") }
+  scope :failed, -> { where(status: "failed") }
 
   def ready?
-    status == 'ready'
+    status == "ready"
   end
 
   def pending?
-    status == 'pending'
+    status == "pending"
   end
 
   def failed?
-    status == 'failed'
+    status == "failed"
   end
 end

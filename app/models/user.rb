@@ -13,7 +13,7 @@ class User < ApplicationRecord
             format: { with: /\A[a-zA-Z0-9_]+\z/,
                         message: "only allows letters, numbers, and underscores" }
 
-  validates :password, 
+  validates :password,
             length: { minimum: 8 },
             if: :password_required?
 
@@ -21,5 +21,5 @@ class User < ApplicationRecord
 
   def password_required?
     new_record? || password.present?
-  end            
+  end
 end

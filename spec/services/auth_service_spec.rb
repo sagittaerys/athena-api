@@ -55,7 +55,6 @@ RSpec.describe AuthService do
         AuthService.refresh(raw_token: "invalidtoken")
       }.to raise_error(AuthService::InvalidTokenError)
     end
-
   end
 
   describe ".logout" do

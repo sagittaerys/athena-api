@@ -86,4 +86,5 @@ jobs:
           DB_PASSWORD: postgres
           DB_HOST: localhost
           DB_PORT: 5432
+          SECRET_KEY_BASE: a_very_long_test_secret_key_that_is_at_least_64_characters_long_for_ci
         run: bin/rails db:migrate && bundle exec rspec

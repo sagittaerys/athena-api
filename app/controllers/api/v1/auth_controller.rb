@@ -1,7 +1,7 @@
 module Api
   module V1
     class AuthController < ApplicationController
-      skip_before_action :authenticate_request!, only: [:register, :login]
+      skip_before_action :authenticate_request!, only: [ :register, :login ]
 
       def register
         result = AuthService.register(

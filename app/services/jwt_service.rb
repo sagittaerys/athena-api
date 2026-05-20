@@ -1,5 +1,5 @@
 class JwtService
-  SECRET_KEY = Rails.application.credentials.secret_key_base
+  SECRET_KEY = Rails.application.secret_key_base
   ACCESS_TOKEN_EXPIRY = 15.minutes
   REFRESH_TOKEN_EXPIRY = 30.days
 

@@ -35,4 +35,10 @@ RSpec.describe LibraryItem, type: :model do
       expect(LibraryItem.recent.first).to eq(ebooks_item)
     end
   end
+
+  describe "associations" do
+    it { should belong_to(:user) }
+    it { should have_many(:audio_chunks).dependent(:destroy) }
+    it { should have_many(:reading_progresses).dependent(:destroy) }
+  end
 end

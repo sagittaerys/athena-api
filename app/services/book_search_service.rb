@@ -2,6 +2,24 @@ class BookSearchService
   GUTENDEX_BASE = "https://gutendex.com/books"
   OPEN_LIBRARY_BASE = "https://openlibrary.org/search.json"
 
+  GENRES = {
+    "Fiction" => "fiction",
+    "Adventure" => "adventure",
+    "Romance" => "love stories",
+    "Mystery" => "detective and mystery stories",
+    "Science Fiction" => "science fiction",
+    "Horror" => "horror tales",
+    "Historical Fiction" => "historical fiction",
+    "Philosophy" => "philosophy",
+    "Biography" => "biography",
+    "Poetry" => "poetry",
+    "Drama" => "drama",
+    "Humour" => "humor",
+    "Travel" => "travel",
+    "Science" => "natural history",
+    "Religion" => "religious fiction"
+  }.freeze
+
   def self.search(query: nil, page: 1, genre: nil)
     results = search_gutendex(query: query, page: page, genre: genre)
     results = search_open_library(query: query, page: page) if results.empty?

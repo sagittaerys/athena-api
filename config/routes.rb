@@ -9,6 +9,12 @@ Rails.application.routes.draw do
         post :refresh
         delete :logout
       end
+
+      resources :books, only: [ :index, :show ] do
+        collection do
+          get :genres
+        end
+      end
     end
   end
 end

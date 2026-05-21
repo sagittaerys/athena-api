@@ -2,12 +2,12 @@ class BookSearchService
   GUTENDEX_BASE = "https://gutendex.com/books"
   OPEN_LIBRARY_BASE = "https://openlibrary.org/search.json"
 
-  def self.search(query:)
-    results = search_gutendex(query: query)
-    results = search_open_library(query: query) if results.empty?
+  def self.search(query: nil, page: 1, genre: nil)
+    results = search_gutendex(query: query, page: page, genre: genre)
+    results = search_open_library(query: query, page: page) if results.empty?
     results
   rescue StandardError
-    search_open_library(query: query)
+    search_open_library(query: query, page: page)
   end
 
   def self.find_book(source:, external_id:)
@@ -23,25 +23,41 @@ class BookSearchService
 
   private
 
-  def self.search_gutendex(query:)
-    url = "#{GUTENDEX_BASE}?search=#{URI.encode_www_form_component(query)}&languages=en&copyright=false"
+  def self.search_gutendex(query:, page: 1, genre: nil)
+    params = {
+      languages: "en",
+      copyright: false,
+      page: page
+    }
+    params[:search] = query if query.present?
+    params[:topic] = genre if genre.present?
+
+    url = "#{GUTENDEX_BASE}?#{params.to_query}"
     response = HTTParty.get(url, timeout: 10)
     return [] unless response.success?
 
     data = response.parsed_response
     data["results"].map { |book| normalize_gutendex(book) }
-  rescue StandardError
+  rescue StandardError => e
+    Rails.logger.error "Gutendex search failed: #{e.message}"
     []
   end
 
-  def self.search_open_library(query:)
-    url = "#{OPEN_LIBRARY_BASE}?q=#{URI.encode_www_form_component(query)}&limit=20"
+  def self.search_open_library(query:, page: 1)
+    params = {
+      limit: 20,
+      page: page
+    }
+    params[:q] = query if query.present?
+
+    url = "#{OPEN_LIBRARY_BASE}?#{params.to_query}"
     response = HTTParty.get(url, timeout: 10)
     return [] unless response.success?
 
     data = response.parsed_response
     data["docs"].map { |book| normalize_open_library(book) }
-  rescue StandardError
+  rescue StandardError => e
+    Rails.logger.error "Open Library search failed: #{e.message}"
     []
   end
 
@@ -51,6 +67,12 @@ class BookSearchService
     normalize_gutendex(response.parsed_response)
   rescue StandardError
     nil
+  end
+
+  def self.format_author(name)
+    return "Unknown" unless name
+    parts = name.split(", ")
+    parts.length == 2 ? "#{parts[1].split('(').first.strip} #{parts[0]}" : name
   end
 
   def self.find_open_library_book(external_id)
@@ -65,7 +87,7 @@ class BookSearchService
   end
 
   def self.normalize_gutendex(book)
-    author = book["authors"]&.first&.dig("name") || "Unknown"
+    author = format_author(book["authors"]&.first&.dig("name"))
     cover = book["formats"]&.dig("image/jpeg")
     epub = book["formats"]&.dig("application/epub+zip")
 

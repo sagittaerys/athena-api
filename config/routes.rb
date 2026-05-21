@@ -15,6 +15,8 @@ Rails.application.routes.draw do
           get :genres
         end
       end
+
+      resources :library_items, only: [ :index, :show, :create, :destroy ]
     end
   end
 end

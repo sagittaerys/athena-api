@@ -1,6 +1,12 @@
 class User < ApplicationRecord
   has_secure_password
 
+  has_many :voice_profiles, dependent: :destroy
+  has_many :library_items, dependent: :destroy
+  has_many :reading_progresses, dependent: :destroy
+  has_many :audio_chunks, dependent: :destroy
+  has_many :refresh_tokens, dependent: :destroy
+
   validates :email,
             presence: true,
             uniqueness: { case_sensitive: false },

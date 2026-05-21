@@ -1,6 +1,9 @@
 class LibraryItem < ApplicationRecord
   belongs_to :user
 
+  has_many :audio_chunks, dependent: :destroy
+  has_many :reading_progresses, dependent: :destroy
+
   SOURCES = %w[gutenberg standard_ebooks open_library imported].freeze
 
   validates :title, presence: true

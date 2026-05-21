@@ -12,7 +12,7 @@ RSpec.describe LibraryItem, type: :model do
     it { should validate_presence_of(:source) }
     it { should validate_inclusion_of(:source).in_array(LibraryItem::SOURCES) }
   end
-
+  
   describe "scopes" do
     let!(:gutenberg_item) { create(:library_item, source: "gutenberg") }
     let!(:imported_item)  { create(:library_item, source: "imported") }
@@ -34,5 +34,11 @@ RSpec.describe LibraryItem, type: :model do
     it "orders by most recent" do
       expect(LibraryItem.recent.first).to eq(ebooks_item)
     end
+  end
+
+  describe "associations" do
+    it { should belong_to(:user) }
+    it { should have_many(:audio_chunks).dependent(:destroy) }
+    it { should have_many(:reading_progresses).dependent(:destroy) }
   end
 end

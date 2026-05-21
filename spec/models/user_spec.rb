@@ -30,4 +30,12 @@ RSpec.describe User, type: :model do
       expect(user.password_digest).not_to eq("password123")
     end
   end
+
+  describe "associations" do
+    it { should have_many(:voice_profiles).dependent(:destroy) }
+    it { should have_many(:library_items).dependent(:destroy) }
+    it { should have_many(:reading_progresses).dependent(:destroy) }
+    it { should have_many(:audio_chunks).dependent(:destroy) }
+    it { should have_many(:refresh_tokens).dependent(:destroy) }
+  end
 end

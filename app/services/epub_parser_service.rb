@@ -76,12 +76,11 @@ class EpubParserService
       link.replace(link.text)
     end
 
-    doc.css("p, h1, h2, h3, h4, h5, h6, div").map do |node|
-      text = node.text.strip
-      text.empty? ? nil : text
-    end.compact.join("\n\n")
+    doc.css("p, h1, h2, h3, h4, h5, h6").map do |node|
+      content = node.text.strip
+      content.empty? ? nil : content
+    end.compact.uniq.join("\n\n")
   end
-
 
   def split_into_chunks(text, max_chars: 500)
     paragraphs = text.split("\n\n").map(&:strip).reject(&:empty?)

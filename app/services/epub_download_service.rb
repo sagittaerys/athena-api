@@ -16,8 +16,7 @@ class EpubDownloadService
   end
 
   def clear_cache
-    FileUtils.rm_f(cached_path)
-    cached_path
+    FileUtils.rm_f(cache_path)
   end
 
   private

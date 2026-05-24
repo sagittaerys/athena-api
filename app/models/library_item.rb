@@ -14,4 +14,13 @@ class LibraryItem < ApplicationRecord
   scope :imported, -> { where(source: "imported") }
   scope :from_catalog, -> { where.not(source: "imported") }
   scope :recent, -> { order(created_at: :desc) }
+
+
+  after_destroy :clear_epub_cache
+
+  private
+
+  def clear_epub_cache
+    EpubDownloadService.new(self).clear_cache
+  end
 end

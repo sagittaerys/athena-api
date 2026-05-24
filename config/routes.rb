@@ -16,6 +16,12 @@ Rails.application.routes.draw do
         end
       end
 
+      resources :library_items, only: [ :index, :show, :create, :destroy ] do
+        member do
+          post :parse_epub
+        end
+      end
+
       resources :library_items, only: [ :index, :show, :create, :destroy ]
     end
   end

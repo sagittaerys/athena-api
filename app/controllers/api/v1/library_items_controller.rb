@@ -6,6 +6,31 @@ module Api
         render json: { library_items: serialize_library_items(library_items) }, status: :ok
       end
 
+      def parse_epub
+        library_item = current_user.library_items.find_by(id: params[:id])
+
+        unless library_item
+          render json: { error: "Not found" }, status: :not_found
+          return
+        end
+
+        unless library_item.epub_url.present?
+          render json: { error: "No EPUB available for this book" }, status: :unprocessable_entity
+          return
+        end
+
+        epub_path = EpubDownloadService.new(library_item).fetch
+        chapters = EpubParserService.new(epub_path).parse
+
+        render json: { chapters: chapters }, status: :ok
+
+        rescue ArgumentError => e
+        render json: { error: e.message }, status: :unprocessable_entity
+        rescue StandardError => e
+        Rails.logger.error "EPUB parse failed: #{e.message}"
+        render json: { error: "Failed to parse EPUB" }, status: :internal_server_error
+      end
+
       def show
         library_item = current_user.library_items.find_by(id: params[:id])
 

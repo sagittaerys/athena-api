@@ -2,7 +2,7 @@
 
 > The Rails API backend for Athena — a voice-cloning EPUB reading app.
 
-This repository basically contains the Rails 8 API that powers Athena. It handles user authentication, book/cannon discovery across multiple free APIs (Guternberg and OpenLibrary in this case), personal library management, EPUB parsing, and orchestrates communication with the TTS server for audio generation.
+This repository basically contains the Rails 8 API that powers Athena. It handles user authentication, book/cannon discovery across multiple free APIs (Gutenberg and OpenLibrary in this case), personal library management, EPUB parsing, and orchestrates communication with the TTS server for audio generation.
 
 ---
 
@@ -221,7 +221,3 @@ Please follow the existing code style. Rubocop runs on every PR via GitHub Actio
 ## License
 
 MIT — see LICENSE for details.
-
----
-
-*Built by [Olamilekan Aremu](https://github.com/sagittaerys).*

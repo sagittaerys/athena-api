@@ -4,22 +4,22 @@ class TtsService
 
   def self.clone_voice(audio_file_path)
     uri = URI("#{TTS_SERVER_URL}/clone/")
-    
+
     Net::HTTP.start(uri.host, uri.port) do |http|
       request = Net::HTTP::Post.new(uri)
       request["x-secret-key"] = TTS_SECRET_KEY
-      
+
       form_data = [
-        ["file", File.open(audio_file_path), { filename: "sample.wav", content_type: "audio/wav" }]
+        [ "file", File.open(audio_file_path), { filename: "sample.wav", content_type: "audio/wav" } ]
       ]
       request.set_form(form_data, "multipart/form-data")
-      
+
       response = http.request(request)
-      
+
       unless response.is_a?(Net::HTTPSuccess)
         raise "TTS server error: #{response.code} #{response.body}"
       end
-      
+
       JSON.parse(response.body)
     end
   rescue => e

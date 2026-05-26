@@ -29,8 +29,8 @@ class TtsService
 
   def self.synthesize(voice_profile_id:, text:, chapter_index:, chunk_index:)
     uri = URI("#{TTS_SERVER_URL}/synthesize/")
-    
-    Net::HTTP.start(uri.host, uri.port) do |http|
+
+    Net::HTTP.start(uri.host, uri.port, read_timeout: 120, open_timeout: 10) do |http|
       request = Net::HTTP::Post.new(uri)
       request["x-secret-key"] = TTS_SECRET_KEY
       request["Content-Type"] = "application/json"
@@ -40,16 +40,16 @@ class TtsService
         chapter_index: chapter_index,
         chunk_index: chunk_index
       }.to_json
-      
+
       response = http.request(request)
-      
+
       unless response.is_a?(Net::HTTPSuccess)
         raise "TTS server error: #{response.code} #{response.body}"
       end
-      
+
       response.body
     end
-  rescue => e
+    rescue => e
     Rails.logger.error "Synthesis failed: #{e.message}"
     raise
   end

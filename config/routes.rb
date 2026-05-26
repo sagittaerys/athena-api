@@ -25,6 +25,13 @@ Rails.application.routes.draw do
       resources :library_items, only: [ :index, :show, :create, :destroy ]
 
       resources :voice_profiles, only: [ :show, :create, :destroy ]
+
+      resources :library_items, only: [ :index, :show, :create, :destroy ] do
+        member do
+          post :parse_epub
+        end
+        resources :audio_chunks, only: [ :create, :show ]
+      end
     end
   end
 end

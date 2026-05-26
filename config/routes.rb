@@ -23,6 +23,8 @@ Rails.application.routes.draw do
       end
 
       resources :library_items, only: [ :index, :show, :create, :destroy ]
+
+      resources :voice_profiles, only: [ :show, :create, :destroy ]
     end
   end
 end

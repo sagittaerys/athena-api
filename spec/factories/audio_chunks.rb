@@ -6,5 +6,6 @@ FactoryBot.define do
     chunk_index { 1 }
     audio_url { nil }
     status { "pending" }
+    text { "It is a truth universally acknowledged." }
   end
 end

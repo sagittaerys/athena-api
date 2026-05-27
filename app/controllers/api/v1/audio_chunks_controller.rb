@@ -87,9 +87,9 @@ module Api
         end
 
         send_file chunk.audio_url,
-                  type: "audio/wav",
-                  disposition: "inline",
-                  filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
+          type: "audio/wav",
+          disposition: "inline",
+          filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
       end
     end
   end

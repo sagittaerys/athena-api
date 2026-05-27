@@ -16,18 +16,6 @@ module Api
           return
         end
 
-        existing = AudioChunk.find_by(
-          library_item: library_item,
-          user: current_user,
-          chapter_index: params[:chapter_index],
-          chunk_index: params[:chunk_index]
-        )
-
-        if existing&.ready?
-          render json: { audio_chunk: serialize(existing) }, status: :ok
-          return
-        end
-
         chunk = AudioChunk.find_or_initialize_by(
           library_item: library_item,
           user: current_user,
@@ -35,31 +23,20 @@ module Api
           chunk_index: params[:chunk_index].to_i
         )
 
-        chunk.status = "pending"
+        if chunk.ready?
+          render json: { audio_chunk: serialize(chunk) }, status: :ok
+          return
+        end
+
+        chunk.assign_attributes(
+          text: params[:text],
+          status: "pending"
+        )
         chunk.save!
 
-        begin
-          audio_data = TtsService.synthesize(
-            voice_profile_id: voice_profile.kokoro_profile_id,
-            text: params[:text],
-            chapter_index: params[:chapter_index].to_i,
-            chunk_index: params[:chunk_index].to_i
-          )
+        AudioSynthesisJob.perform_later(chunk.id)
 
-          audio_url = save_audio(audio_data, library_item.id, params[:chapter_index], params[:chunk_index])
-
-          chunk.update!(
-            audio_url: audio_url,
-            status: "ready"
-          )
-
-          render json: { audio_chunk: serialize(chunk) }, status: :created
-
-        rescue => e
-          chunk.update!(status: "failed")
-          Rails.logger.error "Audio synthesis failed: #{e.message}"
-          render json: { error: "Audio synthesis failed" }, status: :internal_server_error
-        end
+        render json: { audio_chunk: serialize(chunk) }, status: :accepted
       end
 
       def show
@@ -76,15 +53,6 @@ module Api
       end
 
       private
-
-      def save_audio(audio_data, library_item_id, chapter_index, chunk_index)
-        dir = Rails.root.join("storage", "audio", library_item_id.to_s, chapter_index.to_s)
-        FileUtils.mkdir_p(dir)
-        filename = "chunk_#{chunk_index}.wav"
-        path = dir.join(filename).to_s
-        File.binwrite(path, audio_data)
-        path
-      end
 
       def serialize(chunk)
         {

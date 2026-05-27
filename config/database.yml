@@ -10,6 +10,14 @@ development:
   password: <%= ENV["DB_PASSWORD"] %>
   host: <%= ENV["DB_HOST"] %>
   port: <%= ENV["DB_PORT"] %>
+  queue:
+    <<: *default
+    database: athena_api_development
+    username: <%= ENV["DB_USERNAME"] %>
+    password: <%= ENV["DB_PASSWORD"] %>
+    host: <%= ENV["DB_HOST"] %>
+    port: <%= ENV["DB_PORT"] %>
+    migrations_paths: db/queue_migrate
 
 test:
   <<: *default

@@ -10,5 +10,6 @@ module AthenaApi
     config.autoload_lib(ignore: %w[ assets tasks ])
     config.api_only = true
     config.middleware.use Rack::Attack
+    config.active_job.queue_adapter = :solid_queue
   end
 end

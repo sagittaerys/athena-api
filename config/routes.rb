@@ -32,6 +32,17 @@ Rails.application.routes.draw do
         end
         resources :audio_chunks, only: [ :create, :show ]
       end
+
+      resources :library_items, only: [ :index, :show, :create, :destroy ] do
+        member do
+          post :parse_epub
+        end
+        resources :audio_chunks, only: [ :create, :show ] do
+          member do
+            get :stream
+          end
+        end
+      end
     end
   end
 end

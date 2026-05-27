@@ -63,6 +63,34 @@ module Api
           status: chunk.status
         }
       end
+
+      def stream
+        chunk = AudioChunk.find_by(
+          id: params[:id],
+          user: current_user
+        )
+
+        unless chunk
+          render json: { error: "Not found" }, status: :not_found
+          return
+        end
+
+        unless chunk.ready?
+          render json: { error: "Audio not ready yet", status: chunk.status },
+                status: :accepted
+          return
+        end
+
+        unless File.exist?(chunk.audio_url)
+          render json: { error: "Audio file not found" }, status: :not_found
+          return
+        end
+
+        send_file chunk.audio_url,
+                  type: "audio/wav",
+                  disposition: "inline",
+                  filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
+      end
     end
   end
 end

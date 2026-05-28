@@ -52,6 +52,42 @@ module Api
         end
       end
 
+      def stream
+          chunk = AudioChunk.find_by(
+            id: params[:id],
+            user: current_user
+          )
+
+          unless chunk
+            render json: { error: "Not found" }, status: :not_found
+            return
+          end
+
+          unless chunk.ready?
+            render json: { error: "Audio not ready yet", status: chunk.status },
+                  status: :accepted
+            return
+          end
+
+          audio_path = chunk.audio_url
+          allowed_dir = Rails.root.join("storage", "audio").to_s
+
+          unless audio_path&.start_with?(allowed_dir)
+            render json: { error: "Invalid file path" }, status: :forbidden
+            return
+          end
+
+          unless File.exist?(audio_path)
+            render json: { error: "Audio file not found" }, status: :not_found
+            return
+          end
+
+          send_file audio_path,
+              type: "audio/wav",
+              disposition: "inline",
+              filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
+        end
+
       private
 
       def serialize(chunk)
@@ -62,42 +98,6 @@ module Api
           audio_url: chunk.audio_url,
           status: chunk.status
         }
-      end
-
-      def stream
-        chunk = AudioChunk.find_by(
-          id: params[:id],
-          user: current_user
-        )
-
-        unless chunk
-          render json: { error: "Not found" }, status: :not_found
-          return
-        end
-
-        unless chunk.ready?
-          render json: { error: "Audio not ready yet", status: chunk.status },
-                status: :accepted
-          return
-        end
-
-        audio_path = chunk.audio_url
-        allowed_dir = Rails.root.join("storage", "audio").to_s
-
-        unless audio_path&.start_with?(allowed_dir)
-          render json: { error: "Invalid file path" }, status: :forbidden
-          return
-        end
-
-        unless File.exist?(audio_path)
-          render json: { error: "Audio file not found" }, status: :not_found
-          return
-        end
-
-        send_file audio_path,
-            type: "audio/wav",
-            disposition: "inline",
-            filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
       end
     end
   end

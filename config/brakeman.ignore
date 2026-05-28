@@ -1,0 +1,13 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "File Access",
+      "warning_code": 16,
+      "fingerprint": "SendFile",
+      "check_name": "SendFile",
+      "message": "Model attribute used in file name",
+      "file": "app/controllers/api/v1/audio_chunks_controller.rb",
+      "note": "Path validated against allowed_dir before send_file call"
+    }
+  ]
+}

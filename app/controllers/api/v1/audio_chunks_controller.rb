@@ -81,15 +81,23 @@ module Api
           return
         end
 
-        unless File.exist?(chunk.audio_url)
+        audio_path = chunk.audio_url
+        allowed_dir = Rails.root.join("storage", "audio").to_s
+
+        unless audio_path&.start_with?(allowed_dir)
+          render json: { error: "Invalid file path" }, status: :forbidden
+          return
+        end
+
+        unless File.exist?(audio_path)
           render json: { error: "Audio file not found" }, status: :not_found
           return
         end
 
-        send_file chunk.audio_url,
-          type: "audio/wav",
-          disposition: "inline",
-          filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
+        send_file audio_path,
+            type: "audio/wav",
+            disposition: "inline",
+            filename: "chunk_#{chunk.chapter_index}_#{chunk.chunk_index}.wav"
       end
     end
   end

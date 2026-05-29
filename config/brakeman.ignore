@@ -1,13 +1,10 @@
 {
   "ignored_warnings": [
     {
-      "warning_type": "File Access",
-      "warning_code": 16,
-      "fingerprint": "SendFile",
-      "check_name": "SendFile",
-      "message": "Model attribute used in file name",
-      "file": "app/controllers/api/v1/audio_chunks_controller.rb",
+      "fingerprint": "2ff9c851dbc08d78dc0846b7ef0e6b966362d6a53060a0b4f83eee4bdfbd480d",
       "note": "Path validated against allowed_dir before send_file call"
     }
-  ]
+  ],
+  "updated": "2026-05-28 23:00:00",
+  "brakeman_version": "8.0.4"
 }

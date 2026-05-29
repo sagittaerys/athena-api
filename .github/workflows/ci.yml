@@ -20,7 +20,7 @@ jobs:
           bundler-cache: true
 
       - name: Scan for security vulnerabilities
-        run: bin/brakeman --no-pager
+        run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
 
       - name: Scan for vulnerable gems
         run: bin/bundler-audit

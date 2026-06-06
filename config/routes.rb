@@ -16,21 +16,10 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :library_items, only: [ :index, :show, :create, :destroy ] do
-        member do
-          post :parse_epub
+      resources :voice_profiles, only: [ :show, :create, :destroy ] do
+        collection do
+          get :current
         end
-      end
-
-      resources :library_items, only: [ :index, :show, :create, :destroy ]
-
-      resources :voice_profiles, only: [ :show, :create, :destroy ]
-
-      resources :library_items, only: [ :index, :show, :create, :destroy ] do
-        member do
-          post :parse_epub
-        end
-        resources :audio_chunks, only: [ :create, :show ]
       end
 
       resources :library_items, only: [ :index, :show, :create, :destroy ] do

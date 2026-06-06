@@ -1,6 +1,16 @@
 module Api
   module V1
     class VoiceProfilesController < ApplicationController
+      def current
+        voice_profile = current_user.voice_profiles.order(created_at: :desc).first
+
+        if voice_profile
+          render json: { voice_profile: serialize(voice_profile) }, status: :ok
+        else
+          render json: { voice_profile: nil }, status: :ok
+        end
+      end
+
       def show
         voice_profile = current_user.voice_profiles.find_by(id: params[:id])
 

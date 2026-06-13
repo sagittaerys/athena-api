@@ -120,6 +120,36 @@ The test suite covers models, services, jobs, and request specs across all endpo
 
 ---
 
+## Ota
+
+This repo also ships an [`ota.yaml`](./ota.yaml) contract for deterministic setup, task execution,
+and CI/runtime proofing.
+
+```bash
+# inspect readiness and contract health
+ota doctor
+
+# prepare the native source-dev path
+ota up --workflow source-dev --native
+
+# start the Rails API
+ota run dev --native
+
+# in a separate terminal, start the job worker
+ota run worker --native
+
+# run the repo verification lane
+ota run verify:ci --native
+```
+
+If you only want to inspect the modeled task surface first:
+
+```bash
+ota tasks --use
+```
+
+---
+
 ## Database schema
 
 ```

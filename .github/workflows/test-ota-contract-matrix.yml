@@ -1,0 +1,366 @@
+# Copyright (C) 2026 — 2026, Ota. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0. See LICENSE for the full license text.
+
+name: "Test: Ota contract matrix"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ota_version:
+        description: Released Ota version to install for this matrix run
+        required: false
+        default: v1.6.20
+  pull_request:
+    paths:
+      - "ota.yaml"
+      - ".github/workflows/test-ota-contract-matrix.yml"
+  push:
+    paths:
+      - "ota.yaml"
+      - ".github/workflows/test-ota-contract-matrix.yml"
+
+concurrency:
+  group: ota-contract-matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  OTA_NO_UPDATE_CHECK: "1"
+  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.20' }}
+
+jobs:
+  native-ubuntu:
+    name: Ota Contract Matrix (ubuntu-full)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install native prerequisite packages
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: false
+
+      - name: Install ota (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Assert ota minimum version from contract
+        shell: bash
+        run: |
+          ota --version | tee ota-version.txt
+          required="$(awk -F'\"' '/minimum_version:/{print $2; exit}' ota.yaml)"
+          if [ -z "$required" ]; then
+            echo "missing metadata.ota.minimum_version in ota.yaml"
+            exit 1
+          fi
+          node - "$required" "$(cat ota-version.txt)" <<'JS'
+          const required = process.argv[2];
+          const versionLine = process.argv[3];
+          const match = versionLine.match(/v(\d+\.\d+\.\d+)/);
+          if (!match) {
+            console.error(`unable to parse ota version from: ${versionLine}`);
+            process.exit(1);
+          }
+          const current = match[1];
+          const toParts = (v) => v.split('.').map((x) => Number.parseInt(x, 10));
+          const compare = (a, b) => {
+            const ap = toParts(a);
+            const bp = toParts(b);
+            for (let i = 0; i < 3; i += 1) {
+              const diff = (ap[i] || 0) - (bp[i] || 0);
+              if (diff !== 0) return diff;
+            }
+            return 0;
+          };
+          if (compare(current, required) < 0) {
+            console.error(`installed ota ${current} does not satisfy minimum_version ${required}`);
+            process.exit(1);
+          }
+          JS
+
+      - name: Validate contract
+        shell: bash
+        run: |
+          ota validate --json . > ota-validate.json
+          ota validate .
+
+      - name: Doctor verify workflow
+        shell: bash
+        run: ota doctor --workflow verify .
+
+      - name: List task surfaces
+        shell: bash
+        run: |
+          ota tasks --use .
+          ota tasks --safe --use .
+          ota tasks --unsafe --use .
+
+      - name: List workflows
+        shell: bash
+        run: ota workflows .
+
+      - name: Export execution topology
+        shell: bash
+        run: ota execution topology --json . > ota-execution-topology.json
+
+      - name: Dry-run verify workflow
+        shell: bash
+        run: ota up --workflow verify --native --dry-run .
+
+      - name: Dry-run app workflow
+        shell: bash
+        run: ota up --workflow app --native --dry-run .
+
+      - name: Execute verify workflow
+        timeout-minutes: 90
+        shell: bash
+        run: ota up --workflow verify --native --stream .
+
+      - name: Proof app workflow
+        timeout-minutes: 60
+        shell: bash
+        run: ota proof runtime --workflow app --native --json . > ota-proof-app.json
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-contract-matrix-ubuntu-full
+          path: |
+            ota-version.txt
+            ota-validate.json
+            ota-execution-topology.json
+            ota-proof-app.json
+            .ota/proof/app/topology.json
+            .ota/proof/app/doctor.json
+            .ota/proof/app/up.log
+
+  native-macos:
+    name: Ota Contract Matrix (macos-full)
+    runs-on: macos-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install native prerequisite packages
+        shell: bash
+        run: |
+          brew install postgresql@16 pkg-config
+          echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
+          brew services start postgresql@16
+          for _ in $(seq 1 30); do
+            if pg_isready -h localhost -p 5432; then
+              break
+            fi
+            sleep 2
+          done
+          createuser -s postgres || true
+          psql postgres -c "ALTER USER postgres WITH PASSWORD 'ci-postgres-password';"
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: false
+
+      - name: Install ota (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Validate contract
+        shell: bash
+        run: ota validate .
+
+      - name: Doctor verify workflow
+        shell: bash
+        run: ota doctor --workflow verify .
+
+      - name: Dry-run verify workflow
+        shell: bash
+        run: ota up --workflow verify --native --dry-run .
+
+      - name: Dry-run app workflow
+        shell: bash
+        run: ota up --workflow app --native --dry-run .
+
+      - name: Execute verify workflow
+        timeout-minutes: 90
+        shell: bash
+        run: ota up --workflow verify --native --stream .
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-contract-matrix-macos-full
+          path: |
+            .ota/proof
+
+  native-windows:
+    name: Ota Contract Matrix (windows-static)
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: false
+
+      - name: Install ota (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Validate contract
+        shell: powershell
+        run: ota validate .
+
+      - name: Doctor static verify workflow
+        shell: powershell
+        run: ota doctor --workflow verify-static .
+
+      - name: Dry-run static verify workflow
+        shell: powershell
+        run: ota up --workflow verify-static --native --dry-run .
+
+      - name: Execute static verify workflow
+        timeout-minutes: 90
+        shell: powershell
+        run: ota up --workflow verify-static --native --stream .
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-contract-matrix-windows-static
+          path: |
+            .ota/proof
+
+  container-ubuntu:
+    name: Ota Contract Matrix (ubuntu-container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install ota (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Validate contract
+        shell: bash
+        run: ota validate .
+
+      - name: Doctor static verify workflow (container)
+        shell: bash
+        run: ota doctor --mode container --workflow verify-static .
+
+      - name: Dry-run container install
+        shell: bash
+        run: ota run install --mode container --dry-run .
+
+      - name: Dry-run container lint
+        shell: bash
+        run: ota run lint --mode container --dry-run .
+
+      - name: Execute container lint
+        timeout-minutes: 60
+        shell: bash
+        run: ota run lint --mode container --stream .
+
+      - name: Execute container security scan
+        timeout-minutes: 60
+        shell: bash
+        run: ota run security:brakeman --mode container --stream .
+
+      - name: Execute container audit
+        timeout-minutes: 60
+        shell: bash
+        run: ota run security:audit --mode container --stream .
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-contract-matrix-ubuntu-container
+          path: |
+            .ota/proof

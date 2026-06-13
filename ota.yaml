@@ -1,0 +1,529 @@
+version: 1
+project:
+  name: athena-api
+  description: Rails API readiness slice for local development, CI-style verification, PostgreSQL-backed runtime, and production image build
+  type: application
+metadata:
+  ota:
+    minimum_version: "1.6.20"
+execution:
+  default_context: host
+  contexts:
+    host:
+      backend: native
+      only_on:
+        - linux
+        - macos
+        - windows
+    ruby-host:
+      extends: host
+    app:
+      backend: container
+      lifecycle: ephemeral
+      container:
+        image: ruby:3.3.11-bookworm
+        engines:
+          - docker
+          - podman
+      attachments:
+        isolated_paths:
+          - .bundle
+          - vendor/bundle
+          - log
+          - tmp
+          - storage
+    docker-host:
+      backend: native
+toolchains:
+  ruby:
+    version: "3.3.11"
+    package_managers:
+      bundler: "2.5.3"
+    fulfillment:
+      source: ruby
+      mode: run
+native_prerequisites:
+  ruby-native-gem-build-tools:
+    description: Native build tools and PostgreSQL headers needed by Bundler gems such as pg and nokogiri on Linux and macOS
+    platforms:
+      linux:
+        check: ruby-native-gem-build-tools-linux
+        apt:
+          - build-essential
+          - libpq-dev
+          - pkg-config
+      macos:
+        check: ruby-native-gem-build-tools-macos
+        brew:
+          - libpq
+          - pkg-config
+        xcode_clt: true
+env:
+  vars:
+    RAILS_ENV:
+      default: development
+    DB_USERNAME:
+      default: postgres
+    DB_PASSWORD:
+      default: ci-postgres-password
+    DB_HOST:
+      default: localhost
+    DB_PORT:
+      default: "5432"
+    BUNDLE_PATH:
+      default: vendor/bundle
+    ALLOWED_ORIGINS:
+      default: http://localhost:8081
+    SECRET_KEY_BASE:
+      secret: true
+      required: false
+    TTS_SERVER_URL:
+      default: http://localhost:8000
+    TTS_SECRET_KEY:
+      secret: true
+      required: false
+  sources:
+    - kind: dotenv
+      path: .env
+surfaces:
+  api:
+    kind: http
+    port: 3000
+    path: /up
+    readiness:
+      kind: http
+      method: GET
+      path: /up
+      success:
+        status:
+          - 200
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 10s
+services:
+  postgres:
+    required: true
+    manager:
+      kind: host
+    endpoints:
+      host:
+        address: 127.0.0.1
+        port: 5432
+    readiness:
+      from: host
+      kind: tcp
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 2s
+tasks:
+  setup:env:
+    context: host
+    description: Create the local Rails env file with development defaults when missing
+    notes: |
+      README references `.env.example`, but this repository does not currently commit one.
+      This task uses Ota's first-class env bootstrap so `.env` is created idempotently without shell glue.
+    category: setup
+    action:
+      kind: ensure_env_file
+      path: .env
+      vars:
+        DB_USERNAME:
+          value: postgres
+        DB_PASSWORD:
+          value: ci-postgres-password
+        DB_HOST:
+          value: localhost
+        DB_PORT:
+          value: "5432"
+        RAILS_ENV:
+          value: development
+        ALLOWED_ORIGINS:
+          value: http://localhost:8081
+        SECRET_KEY_BASE:
+          random:
+            bytes: 64
+            encoding: hex
+        TTS_SERVER_URL:
+          value: http://localhost:8000
+        TTS_SECRET_KEY:
+          random:
+            bytes: 32
+            encoding: hex
+    effects:
+      writes:
+        - .env
+    internal: true
+  install:
+    context: ruby-host
+    description: Install Ruby dependencies with Bundler into a repo-local bundle path
+    notes: |
+      This follows the README `bundle install` step while keeping dependency hydration under
+      repo-local ignored paths so the write boundary is explicit.
+    category: setup
+    prepare:
+      kind: dependency_hydration
+      medium: package_dependencies
+      source:
+        kind: bundler
+        cwd: .
+        path: vendor/bundle
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: ruby-host
+        container:
+          context: app
+    requirements:
+      toolchains:
+        - ruby
+      any_of:
+        - label: native-ruby-build-tools
+          when:
+            context: ruby-host
+          native:
+            - ruby-native-gem-build-tools
+    effects:
+      writes:
+        - .bundle
+        - vendor/bundle
+      network: true
+      network_kind: dependency_hydration
+  db:prepare:
+    context: ruby-host
+    description: Prepare the Rails development database and Solid Queue schema
+    notes: |
+      This maps to the README database setup path: Rails database preparation plus the Solid Queue schema load.
+    category: setup
+    run: bundle exec rails db:prepare && bundle exec rails runner "load Rails.root.join('db/queue_schema.rb')"
+    depends_on:
+      - install
+      - setup:env
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+        - storage
+      external_state:
+        - postgres
+    internal: true
+  lint:
+    context: ruby-host
+    description: Run the repository RuboCop surface
+    notes: |
+      This maps to the GitHub Actions lint job and uses the repo binstub.
+    category: test
+    run: bin/rubocop -f github
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: ruby-host
+          run: bin/rubocop -f github
+        container:
+          context: app
+          run: bin/rubocop -f github
+    env:
+      RUBOCOP_CACHE_ROOT: tmp/rubocop
+    depends_on:
+      - install
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - tmp
+    safe_for_agent: true
+  security:brakeman:
+    context: ruby-host
+    description: Run Brakeman Rails security analysis
+    notes: |
+      This maps to the GitHub Actions security scan using the repository ignore config.
+    category: test
+    run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: ruby-host
+          run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+        container:
+          context: app
+          run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+    depends_on:
+      - install
+    requirements:
+      toolchains:
+        - ruby
+    safe_for_agent: true
+  security:audit:
+    context: ruby-host
+    description: Run Bundler Audit against the locked gem set
+    notes: |
+      This maps to the GitHub Actions vulnerable-gem scan.
+    category: test
+    run: bin/bundler-audit
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: ruby-host
+          run: bin/bundler-audit
+        container:
+          context: app
+          run: bin/bundler-audit
+    depends_on:
+      - install
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      network: true
+    safe_for_agent: true
+  test:
+    context: ruby-host
+    description: Run the RSpec suite against local PostgreSQL
+    notes: |
+      This maps to the GitHub Actions test job, which migrates PostgreSQL and runs `bundle exec rspec`.
+      The task injects the same test database environment instead of depending on local `.env` edits.
+    category: test
+    run: bundle exec rails db:migrate && bundle exec rspec
+    execution:
+      default_mode: native
+      modes:
+        native:
+          context: ruby-host
+          run: bundle exec rails db:migrate && bundle exec rspec
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:ci-postgres-password@localhost:5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: ci-postgres-password
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      SECRET_KEY_BASE: a_very_long_test_secret_key_that_is_at_least_64_characters_long_for_ci
+    depends_on:
+      - install
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+        - storage
+        - spec
+      external_state:
+        - postgres
+  verify:static:
+    description: Run the bounded static verification path without database mutation
+    notes: |
+      This is the safe agent-facing verification lane for normal code review and content changes.
+      It keeps Bundler hydration explicit but avoids the PostgreSQL-mutating RSpec path.
+    category: test
+    aggregate:
+      tasks:
+        - lint
+        - security:brakeman
+        - security:audit
+    safe_for_agent: true
+  verify:
+    description: Run the default verification path for agent and CI-style checks
+    notes: |
+      This is the Ota entrypoint for normal validation before opening or reviewing a change.
+    category: test
+    aggregate:
+      tasks:
+        - lint
+        - security:brakeman
+        - security:audit
+        - test
+  dev:
+    context: ruby-host
+    description: Start the Rails API server
+    notes: |
+      This follows the README local development path and exposes the Rails health endpoint at `/up`.
+    category: dev
+    launch:
+      kind: command
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - server
+        - -b
+        - 0.0.0.0
+        - -p
+        - "3000"
+    depends_on:
+      - db:prepare
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+        - storage
+      external_state:
+        - postgres
+    runtime:
+      kind: service
+      surfaces:
+        api:
+          project:
+            host:
+              primary: true
+  worker:
+    context: ruby-host
+    description: Start the Solid Queue worker
+    notes: |
+      Use this in a second terminal when testing asynchronous audio synthesis jobs locally.
+    category: dev
+    launch:
+      kind: command
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - solid_queue:start
+    depends_on:
+      - db:prepare
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+      external_state:
+        - postgres
+  docker:build:
+    context: docker-host
+    description: Build the production Rails image from the repository Dockerfile
+    notes: |
+      The Dockerfile is documented as production-oriented, not a local development container path.
+      This task proves image build planning without claiming compose or devcontainer support.
+    category: build
+    run: docker build -t athena-api:ota .
+    requirements:
+      tools:
+        docker: "*"
+    effects:
+      network: true
+      external_state:
+        - docker
+workflows:
+  default: app
+  verify:
+    intent: ci_verification
+    description: CI-style verification path for lint, security scans, and RSpec
+    setup:
+      task: install
+    run:
+      task: verify
+  verify-static:
+    intent: ci_verification
+    description: Bounded host verification path for static checks when local PostgreSQL runtime proof is intentionally out of scope
+    setup:
+      task: install
+    run:
+      task: verify:static
+  app:
+    intent: local_development
+    description: Rails API development workflow with local PostgreSQL
+    prepare:
+      task: setup:env
+    setup:
+      task: db:prepare
+    run:
+      task: dev
+    readiness:
+      surfaces:
+        - api
+    exposes:
+      - surface: api
+  worker:
+    intent: local_development
+    description: Solid Queue worker workflow for async jobs
+    prepare:
+      task: setup:env
+    setup:
+      task: db:prepare
+    run:
+      task: worker
+  image:
+    intent: packaged_runtime
+    description: Production Docker image build workflow
+    run:
+      task: docker:build
+checks:
+  - name: ruby-native-gem-build-tools-linux
+    kind: precondition
+    severity: error
+    run: sh -c "cc --version && pg_config --version && pkg-config --version"
+  - name: ruby-native-gem-build-tools-macos
+    kind: precondition
+    severity: error
+    run: sh -c "xcode-select -p && pg_config --version && pkg-config --version"
+agent:
+  posture: readiness_strict
+  entrypoint: install
+  default_task: verify:static
+  safe_tasks:
+    - lint
+    - security:brakeman
+    - security:audit
+    - verify:static
+  verify_after_changes:
+    - verify:static
+  writable_paths:
+    - app
+    - db
+    - lib
+    - public
+    - spec
+    - test
+    - log
+    - tmp
+    - storage
+    - vendor/bundle
+    - .bundle
+  protected_paths:
+    - .github/workflows
+    - .ruby-version
+    - Gemfile
+    - Gemfile.lock
+    - Dockerfile
+    - .dockerignore
+    - .env
+    - config/credentials.yml.enc
+    - config/database.yml
+    - config/storage.yml
+    - config/queue.yml
+    - config/puma.rb
+    - ota.yaml
+  notes: |
+    This contract intentionally scopes Athena API to the repo-visible Rails API surfaces:
+    Bundler setup, PostgreSQL-backed development, CI-style lint/security/test checks, Solid Queue worker startup,
+    and the documented production Docker image build.
+    This pressure branch depends on Ota `1.6.20` contract surfaces, so keep the matrix pinned to
+    released `1.6.20` or newer instead of falling back to source-install proof.
+    Use `ota tasks --safe --use` before running agent work to see the approved safe task surface.
+    Use `ota run verify:static` after normal code changes; it is the default agent verification path.
+    Use `ota run verify` when you intentionally want the full PostgreSQL-backed CI-style validation path.
+    Use `ota up --workflow app` for the local API runtime and `ota up --workflow worker` for Solid Queue.
+    Do not edit `.env` directly through agent-safe tasks; `setup:env` creates it idempotently when a local runtime path needs it.

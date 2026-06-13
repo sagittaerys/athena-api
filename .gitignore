@@ -29,6 +29,12 @@
 !/tmp/storage/
 !/tmp/storage/.keep
 
+# Ignore Ota local state, receipts, and runtime proof artifacts.
+.ota/state/
+.ota/receipts/
+.ota/proof/
+
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+.idea

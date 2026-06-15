@@ -55,12 +55,6 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: false
-
       - name: Install ota (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -85,30 +79,26 @@ jobs:
             echo "missing metadata.ota.minimum_version in ota.yaml"
             exit 1
           fi
-          node - "$required" "$(cat ota-version.txt)" <<'JS'
-          const required = process.argv[2];
-          const versionLine = process.argv[3];
-          const match = versionLine.match(/v(\d+\.\d+\.\d+)/);
-          if (!match) {
-            console.error(`unable to parse ota version from: ${versionLine}`);
-            process.exit(1);
-          }
-          const current = match[1];
-          const toParts = (v) => v.split('.').map((x) => Number.parseInt(x, 10));
-          const compare = (a, b) => {
-            const ap = toParts(a);
-            const bp = toParts(b);
-            for (let i = 0; i < 3; i += 1) {
-              const diff = (ap[i] || 0) - (bp[i] || 0);
-              if (diff !== 0) return diff;
-            }
-            return 0;
-          };
-          if (compare(current, required) < 0) {
-            console.error(`installed ota ${current} does not satisfy minimum_version ${required}`);
-            process.exit(1);
-          }
-          JS
+          python3 - "$required" "$(cat ota-version.txt)" <<'PY'
+          import re
+          import sys
+
+          required = sys.argv[1]
+          version_line = sys.argv[2]
+          match = re.search(r"v(\d+\.\d+\.\d+)", version_line)
+          if not match:
+              print(f"unable to parse ota version from: {version_line}", file=sys.stderr)
+              raise SystemExit(1)
+
+          current = tuple(int(part) for part in match.group(1).split("."))
+          minimum = tuple(int(part) for part in required.split("."))
+          if current < minimum:
+              print(
+                  f"installed ota {match.group(1)} does not satisfy minimum_version {required}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          PY
 
       - name: Validate contract
         shell: bash
@@ -193,12 +183,6 @@ jobs:
           createuser -s postgres || true
           psql postgres -c "ALTER USER postgres WITH PASSWORD 'ci-postgres-password';"
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: false
-
       - name: Install ota (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -253,12 +237,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: .ruby-version
-          bundler-cache: false
 
       - name: Install ota (Unix)
         if: runner.os != 'Windows'

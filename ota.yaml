@@ -172,8 +172,6 @@ tasks:
     execution:
       default_mode: native
       modes:
-        native:
-          context: ruby-host
         container:
           context: app
     requirements:
@@ -228,20 +226,8 @@ tasks:
     execution:
       default_mode: native
       modes:
-        native:
-          context: ruby-host
-          command:
-            exe: bin/rubocop
-            args:
-              - -f
-              - github
         container:
           context: app
-          command:
-            exe: bin/rubocop
-            args:
-              - -f
-              - github
     env:
       RUBOCOP_CACHE_ROOT: tmp/rubocop
     depends_on:
@@ -268,22 +254,8 @@ tasks:
     execution:
       default_mode: native
       modes:
-        native:
-          context: ruby-host
-          command:
-            exe: bin/brakeman
-            args:
-              - --no-pager
-              - --ignore-config
-              - config/brakeman.ignore
         container:
           context: app
-          command:
-            exe: bin/brakeman
-            args:
-              - --no-pager
-              - --ignore-config
-              - config/brakeman.ignore
     depends_on:
       - install
     requirements:
@@ -303,12 +275,8 @@ tasks:
       modes:
         native:
           context: ruby-host
-          command:
-            exe: bin/bundler-audit
         container:
           context: app
-          command:
-            exe: bin/bundler-audit
     depends_on:
       - install
     requirements:
@@ -325,12 +293,6 @@ tasks:
       The task injects the same test database environment instead of depending on local `.env` edits.
     category: test
     run: bundle exec rails db:migrate && bundle exec rspec
-    execution:
-      default_mode: native
-      modes:
-        native:
-          context: ruby-host
-          run: bundle exec rails db:migrate && bundle exec rspec
     env:
       RAILS_ENV: test
       DATABASE_URL: postgres://postgres:ci-postgres-password@localhost:5432

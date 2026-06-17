@@ -220,16 +220,28 @@ tasks:
     notes: |
       This maps to the GitHub Actions lint job and uses the repo binstub.
     category: test
-    run: bin/rubocop -f github
+    command:
+      exe: bin/rubocop
+      args:
+        - -f
+        - github
     execution:
       default_mode: native
       modes:
         native:
           context: ruby-host
-          run: bin/rubocop -f github
+          command:
+            exe: bin/rubocop
+            args:
+              - -f
+              - github
         container:
           context: app
-          run: bin/rubocop -f github
+          command:
+            exe: bin/rubocop
+            args:
+              - -f
+              - github
     env:
       RUBOCOP_CACHE_ROOT: tmp/rubocop
     depends_on:
@@ -247,16 +259,31 @@ tasks:
     notes: |
       This maps to the GitHub Actions security scan using the repository ignore config.
     category: test
-    run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+    command:
+      exe: bin/brakeman
+      args:
+        - --no-pager
+        - --ignore-config
+        - config/brakeman.ignore
     execution:
       default_mode: native
       modes:
         native:
           context: ruby-host
-          run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+          command:
+            exe: bin/brakeman
+            args:
+              - --no-pager
+              - --ignore-config
+              - config/brakeman.ignore
         container:
           context: app
-          run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+          command:
+            exe: bin/brakeman
+            args:
+              - --no-pager
+              - --ignore-config
+              - config/brakeman.ignore
     depends_on:
       - install
     requirements:
@@ -269,16 +296,19 @@ tasks:
     notes: |
       This maps to the GitHub Actions vulnerable-gem scan.
     category: test
-    run: bin/bundler-audit
+    command:
+      exe: bin/bundler-audit
     execution:
       default_mode: native
       modes:
         native:
           context: ruby-host
-          run: bin/bundler-audit
+          command:
+            exe: bin/bundler-audit
         container:
           context: app
-          run: bin/bundler-audit
+          command:
+            exe: bin/bundler-audit
     depends_on:
       - install
     requirements:

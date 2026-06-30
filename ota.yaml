@@ -218,7 +218,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions lint job and uses the repo binstub.
     category: test
-    command:
+    run:
       exe: bin/rubocop
       args:
         - -f

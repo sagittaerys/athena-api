@@ -245,7 +245,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions security scan using the repository ignore config.
     category: test
-    command:
+    run:
       exe: bin/brakeman
       args:
         - --no-pager
@@ -268,7 +268,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions vulnerable-gem scan.
     category: test
-    command:
+    run:
       exe: bin/bundler-audit
     execution:
       default_mode: native

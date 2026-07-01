@@ -9,7 +9,7 @@ on:
       ota_version:
         description: Released Ota version to install for this matrix run
         required: false
-        default: v1.6.20
+        default: v1.6.22
   pull_request:
     paths:
       - "ota.yaml"
@@ -28,7 +28,7 @@ permissions:
 
 env:
   OTA_NO_UPDATE_CHECK: "1"
-  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.20' }}
+  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.22' }}
 
 jobs:
   native-ubuntu:

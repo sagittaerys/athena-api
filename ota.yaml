@@ -218,11 +218,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions lint job and uses the repo binstub.
     category: test
-    run:
-      exe: bin/rubocop
-      args:
-        - -f
-        - github
+    run: bin/rubocop -f github
     execution:
       default_mode: native
       modes:
@@ -245,12 +241,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions security scan using the repository ignore config.
     category: test
-    run:
-      exe: bin/brakeman
-      args:
-        - --no-pager
-        - --ignore-config
-        - config/brakeman.ignore
+    run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
     execution:
       default_mode: native
       modes:
@@ -269,8 +260,7 @@ tasks:
       This maps to the GitHub Actions vulnerable-gem scan and uses the repo wrapper so
       the audit config stays contract-owned instead of bypassed by a raw gem entrypoint.
     category: test
-    run:
-      exe: bin/bundler-audit
+    run: bin/bundler-audit
     execution:
       default_mode: native
       modes:

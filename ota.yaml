@@ -218,7 +218,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions lint job and uses the repo binstub.
     category: test
-    run:
+    command:
       exe: bin/rubocop
       args:
         - -f
@@ -245,7 +245,7 @@ tasks:
     notes: |
       This maps to the GitHub Actions security scan using the repository ignore config.
     category: test
-    run:
+    command:
       exe: bin/brakeman
       args:
         - --no-pager
@@ -269,7 +269,7 @@ tasks:
       This maps to the GitHub Actions vulnerable-gem scan and uses the repo wrapper so
       the audit config stays contract-owned instead of bypassed by a raw gem entrypoint.
     category: test
-    run:
+    command:
       exe: bin/bundler-audit
     execution:
       default_mode: native
@@ -353,10 +353,9 @@ tasks:
         - exec
         - rails
         - server
-        - -b
-        - 0.0.0.0
-        - -p
-        - "3000"
+      runtime_projection:
+        listener: api
+        adapter: rails
     depends_on:
       - db:prepare
     requires_services:

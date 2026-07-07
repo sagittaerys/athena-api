@@ -6,10 +6,14 @@ name: "Test: Ota contract matrix"
 on:
   workflow_dispatch:
     inputs:
-      ota_version:
-        description: Released Ota version to install for this matrix run
+      ota_source:
+        description: Ota install source selector (`contract`, released version like `v1.6.23`, exact git rev, or branch with `ota_git_branch`)
         required: false
-        default: v1.6.20
+        default: contract
+      ota_git_branch:
+        description: Optional Ota git branch when `ota_source` should install unreleased pressure truth from git
+        required: false
+        default: ""
   pull_request:
     paths:
       - "ota.yaml"
@@ -28,7 +32,8 @@ permissions:
 
 env:
   OTA_NO_UPDATE_CHECK: "1"
-  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.20' }}
+  OTA_SOURCE: ${{ github.event.inputs.ota_source || 'contract' }}
+  OTA_GIT_BRANCH: ${{ github.event.inputs.ota_git_branch || '' }}
 
 jobs:
   native-ubuntu:
@@ -55,19 +60,41 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Assert ota minimum version from contract
@@ -171,6 +198,7 @@ jobs:
       - name: Install native prerequisite packages
         shell: bash
         run: |
+          brew untap aws/tap || true
           brew install postgresql@16 pkg-config
           echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
           brew services start postgresql@16
@@ -183,19 +211,41 @@ jobs:
           createuser -s postgres || true
           psql postgres -c "ALTER USER postgres WITH PASSWORD 'ci-postgres-password';"
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract
@@ -238,19 +288,41 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract
@@ -289,19 +361,41 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract

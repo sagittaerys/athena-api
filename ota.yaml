@@ -17,6 +17,9 @@ execution:
         - windows
     ruby-host:
       extends: host
+      only_on:
+        - linux
+        - macos
     app:
       backend: container
       lifecycle: ephemeral
@@ -209,6 +212,8 @@ tasks:
         - log
         - tmp
         - storage
+      network: true
+      network_kind: integration_test
       external_state:
         - postgres
     internal: true
@@ -315,6 +320,8 @@ tasks:
         - tmp
         - storage
         - spec
+      network: true
+      network_kind: integration_test
       external_state:
         - postgres
   verify:static:
@@ -410,7 +417,13 @@ tasks:
       The Dockerfile is documented as production-oriented, not a local development container path.
       This task proves image build planning without claiming compose or devcontainer support.
     category: build
-    run: docker build -t athena-api:ota .
+    command:
+      exe: docker
+      args:
+        - build
+        - -t
+        - athena-api:ota
+        - .
     requirements:
       tools:
         docker: "*"

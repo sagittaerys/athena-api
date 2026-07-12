@@ -60,6 +60,12 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config
 
+      - name: Install declared Ruby toolchain
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler: 2.5.3
+
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
         uses: ota-run/setup@v1.0.8
@@ -211,6 +217,12 @@ jobs:
           createuser -s postgres || true
           psql postgres -c "ALTER USER postgres WITH PASSWORD 'ci-postgres-password';"
 
+      - name: Install declared Ruby toolchain
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler: 2.5.3
+
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
         uses: ota-run/setup@v1.0.8
@@ -329,18 +341,21 @@ jobs:
         shell: powershell
         run: ota validate .
 
-      - name: Doctor static verify workflow
+      - name: Assert doctor reports native static workflow unavailable on Windows
         shell: powershell
-        run: ota doctor --workflow verify-static .
+        run: |
+          ota doctor --workflow verify-static .
+          if ($LASTEXITCODE -eq 0) {
+            throw "verify-static must be reported unavailable through the Linux/macOS ruby-host context on Windows"
+          }
 
-      - name: Dry-run static verify workflow
+      - name: Assert native static workflow is refused on Windows
         shell: powershell
-        run: ota up --workflow verify-static --native --dry-run .
-
-      - name: Execute static verify workflow
-        timeout-minutes: 90
-        shell: powershell
-        run: ota up --workflow verify-static --native --stream .
+        run: |
+          ota up --workflow verify-static --native --dry-run .
+          if ($LASTEXITCODE -eq 0) {
+            throw "verify-static must be unavailable through the Linux/macOS ruby-host context on Windows"
+          }
 
       - name: Upload artifacts on failure
         if: failure()

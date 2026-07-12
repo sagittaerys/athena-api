@@ -344,18 +344,30 @@ jobs:
       - name: Assert doctor reports native static workflow unavailable on Windows
         shell: powershell
         run: |
-          ota doctor --workflow verify-static .
-          if ($LASTEXITCODE -eq 0) {
+          $doctorOutput = & ota doctor --workflow verify-static --json .
+          $doctorExitCode = $LASTEXITCODE
+          if ($doctorExitCode -eq 0) {
             throw "verify-static must be reported unavailable through the Linux/macOS ruby-host context on Windows"
           }
+          $doctor = $doctorOutput | ConvertFrom-Json
+          if ($doctor.summary.primary_blocker.summary -notlike "Unsupported host platform*") {
+            throw "expected host-platform refusal, got: $($doctor.summary.primary_blocker.summary)"
+          }
+          exit 0
 
       - name: Assert native static workflow is refused on Windows
         shell: powershell
         run: |
-          ota up --workflow verify-static --native --dry-run .
-          if ($LASTEXITCODE -eq 0) {
+          $previewOutput = & ota up --workflow verify-static --native --dry-run --json .
+          $previewExitCode = $LASTEXITCODE
+          if ($previewExitCode -eq 0) {
             throw "verify-static must be unavailable through the Linux/macOS ruby-host context on Windows"
           }
+          $preview = $previewOutput | ConvertFrom-Json
+          if ($preview.summary.primary_blocker.summary -ne "Unsupported host platform") {
+            throw "expected host-platform refusal, got: $($preview.summary.primary_blocker.summary)"
+          }
+          exit 0
 
       - name: Upload artifacts on failure
         if: failure()

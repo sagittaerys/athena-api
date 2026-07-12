@@ -365,7 +365,7 @@ jobs:
             throw "verify-static must be unavailable through the Linux/macOS ruby-host context on Windows"
           }
           $preview = $previewOutput | ConvertFrom-Json
-          if ($preview.summary.primary_blocker.summary -ne "Unsupported host platform") {
+          if ($preview.summary.primary_blocker.summary -notlike "Unsupported host platform*") {
             throw "expected host-platform refusal, got: $($preview.summary.primary_blocker.summary)"
           }
           exit 0

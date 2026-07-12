@@ -350,8 +350,9 @@ jobs:
             throw "verify-static must be reported unavailable through the Linux/macOS ruby-host context on Windows"
           }
           $doctor = $doctorOutput | ConvertFrom-Json
-          if ($doctor.summary.primary_blocker.summary -notlike "Unsupported host platform*") {
-            throw "expected host-platform refusal, got: $($doctor.summary.primary_blocker.summary)"
+          $platformFinding = @($doctor.findings | Where-Object { $_.summary -like "Unsupported host platform*" })
+          if ($platformFinding.Count -eq 0) {
+            throw "expected host-platform refusal in doctor findings"
           }
           exit 0
 

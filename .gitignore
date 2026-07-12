@@ -29,8 +29,9 @@
 !/tmp/storage/
 !/tmp/storage/.keep
 
-# Ignore Ota local state, receipts, and runtime proof artifacts.
+# Ignore Ota local state, semantic snapshots, receipts, and runtime proof artifacts.
 .ota/state/
+.ota/contracts/
 .ota/receipts/
 .ota/proof/
 

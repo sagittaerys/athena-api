@@ -171,13 +171,13 @@ jobs:
         shell: bash
         run: ota up --workflow verify --native --stream .
 
-      - name: Proof app workflow
+      - name: Prove app workflow and PostgreSQL refusal control
         timeout-minutes: 60
         shell: bash
-        run: ota proof runtime --workflow app --native --json . > ota-proof-app.json
+        run: ota proof runtime --workflow app --negative-control postgres-unavailable --native --json . > ota-proof-app.json
 
-      - name: Upload artifacts on failure
-        if: failure()
+      - name: Upload app proof artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ota-contract-matrix-ubuntu-full

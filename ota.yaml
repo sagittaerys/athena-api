@@ -5,7 +5,7 @@ project:
   type: application
 metadata:
   ota:
-    minimum_version: "1.6.22"
+    minimum_version: "1.6.24"
 execution:
   default_context: host
   contexts:
@@ -324,6 +324,37 @@ tasks:
       network_kind: integration_test
       external_state:
         - postgres
+  proof:postgres-unavailable:
+    context: ruby-host
+    description: Prove the Rails database seam fails when the declared PostgreSQL endpoint is unavailable
+    notes: |
+      This is an explicit V11.11 negative control for the app runtime proof. It uses the same
+      Rails database connection path as the application but redirects only this finite control
+      to an unreachable loopback port. A non-zero result is the expected, runner-attested proof
+      outcome; this task is intentionally outside the normal app workflow closure.
+    category: test
+    run: bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')"
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:ci-postgres-password@127.0.0.1:1/athena_api_test
+      DB_USERNAME: postgres
+      DB_PASSWORD: ci-postgres-password
+      DB_HOST: 127.0.0.1
+      DB_PORT: "1"
+      SECRET_KEY_BASE: a_very_long_test_secret_key_that_is_at_least_64_characters_long_for_ci
+    depends_on:
+      - install
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+      network: true
+      network_kind: integration_test
+      external_state:
+        - postgres
   verify:static:
     description: Run the bounded static verification path without database mutation
     notes: |
@@ -459,6 +490,11 @@ workflows:
     readiness:
       surfaces:
         - api
+    proof:
+      negative_controls:
+        - id: postgres-unavailable
+          dependency: postgres
+          task: proof:postgres-unavailable
     exposes:
       - surface: api
   worker:

@@ -330,10 +330,17 @@ tasks:
     notes: |
       This is an explicit V11.11 negative control for the app runtime proof. It uses the same
       Rails database connection path as the application but redirects only this finite control
-      to an unreachable loopback port. A non-zero result is the expected, runner-attested proof
-      outcome; this task is intentionally outside the normal app workflow closure.
+      to an unreachable loopback port. It writes Ota's transaction-bound failure attestation only
+      after Rails reports that PostgreSQL is unavailable; any other non-zero exit remains invalid
+      control evidence. This task is intentionally outside the normal app workflow closure.
     category: test
-    run: bundle exec rails runner "ActiveRecord::Base.connection.execute('SELECT 1')"
+    command:
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - runner
+        - 'require "json"; transaction_id = ENV.fetch("OTA_PROOF_TRANSACTION_ID"); control_id = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_ID"); obligation_id = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_OBLIGATION"); attestation_path = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_ATTESTATION_FILE"); begin; ActiveRecord::Base.connection.execute("SELECT 1"); raise "Ota negative control unexpectedly reached PostgreSQL"; rescue StandardError => error; unavailable = error.is_a?(ActiveRecord::ConnectionNotEstablished) || (defined?(PG::ConnectionBad) && error.is_a?(PG::ConnectionBad)); raise unless unavailable; File.write(attestation_path, JSON.generate({transaction_id: transaction_id, control_id: control_id, obligation_id: obligation_id, failure_kind: "dependency_unavailable"})); warn(error.message); exit 1; end'
     env:
       RAILS_ENV: test
       DATABASE_URL: postgres://postgres:ci-postgres-password@127.0.0.1:1/athena_api_test
@@ -552,11 +559,6 @@ workflows:
     readiness:
       surfaces:
         - api
-    proof:
-      negative_controls:
-        - id: postgres-unavailable
-          dependency: postgres
-          task: proof:postgres-unavailable
     exposes:
       - surface: api
   app-proof:
@@ -578,6 +580,12 @@ workflows:
           producer_task: proof:postgres-marker
           task: proof:postgres-marker-observe
           marker_env: OTA_PROOF_POSTGRES_MARKER
+      negative_controls:
+        - id: postgres-unavailable
+          dependency: postgres
+          obligation: postgres-marker
+          task: proof:postgres-unavailable
+          expected_failure: dependency_unavailable
     exposes:
       - surface: api
   worker:

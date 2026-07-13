@@ -175,16 +175,16 @@ jobs:
         shell: bash
         run: ota up --workflow verify --native --stream .
 
-      - name: Prove app workflow and PostgreSQL refusal control
+      - name: Prove app workflow
         timeout-minutes: 60
         shell: bash
-        run: ota proof runtime --workflow app --negative-control postgres-unavailable --native --json . > ota-proof-app.json
+        run: ota proof runtime --workflow app --native --json . > ota-proof-app.json
 
-      - name: Prove marker-bound PostgreSQL seam observation
+      - name: Prove marker-bound and fault-tested PostgreSQL seam
         timeout-minutes: 60
         shell: bash
         run: |
-          ota proof runtime --workflow app-proof --native --json . > ota-proof-app-seam.json
+          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json . > ota-proof-app-seam.json
           jq -e '
             .ok == true
             and .proof_verdict == "passed"
@@ -194,12 +194,23 @@ jobs:
             and (.seam_observations[0].attestation_digest | startswith("sha256:"))
             and (.dependency_evidence | any(
               .dependency_id == "service:postgres"
-              and .level == "exercised"
+              and .level == "fault_tested"
               and .observation.origin == "round_trip_effect"
               and .observation.evidence_class == "attested"
+              and .negative_control.status == "validated"
+              and .negative_control.same_obligation == true
+              and (.negative_control.failure_attestation_digest | startswith("sha256:"))
             ))
+            and .negative_control.status == "validated"
+            and .negative_control.outcome == "nonzero_exit_observed"
+            and .negative_control.obligation_id == "postgres-marker"
+            and (.negative_control.failure_attestation_digest | startswith("sha256:"))
             and ([.not_proved[]? | select(
               .kind == "dependency_exercise_not_proved"
+              and .dependency_id == "service:postgres"
+            )] | length) == 0
+            and ([.not_proved[]? | select(
+              .kind == "dependency_causality_not_proved"
               and .dependency_id == "service:postgres"
             )] | length) == 0
           ' ota-proof-app-seam.json

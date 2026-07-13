@@ -229,6 +229,9 @@ jobs:
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json
             .ota/proof/app/up.log
+            .ota/proof/app-proof/topology.json
+            .ota/proof/app-proof/doctor.json
+            .ota/proof/app-proof/up.log
 
   native-macos:
     name: Ota Contract Matrix (macos-full)

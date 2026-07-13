@@ -391,10 +391,9 @@ tasks:
     description: Confirm the runner-issued marker is visible through the PostgreSQL seam
     notes: |
       This finite observer is intentionally outside the normal `app-proof` workflow closure.
-      Ota runs it after API readiness and before teardown with the same marker it issued to the
-      runtime setup lane. A zero exit is the contract-owned assertion that the PostgreSQL seam
-      carried this proof transaction's marker, not merely that PostgreSQL was reachable. Its
-      ensure block drops the proof-only table even when marker observation fails.
+      Ota does not give this task the opaque marker. It must recover the marker from PostgreSQL,
+      then write the runner-owned transaction attestation before teardown. Its ensure block drops
+      the proof-only table even when marker observation fails.
     category: test
     command:
       exe: bundle
@@ -402,7 +401,7 @@ tasks:
         - exec
         - rails
         - runner
-        - 'marker = ENV.fetch("OTA_PROOF_POSTGRES_MARKER"); connection = ActiveRecord::Base.connection; begin; observed = connection.select_value("SELECT marker FROM ota_proof_markers WHERE marker = #{connection.quote(marker)}"); raise "Ota proof marker was not observed through PostgreSQL" unless observed == marker; ensure; connection.execute("DROP TABLE IF EXISTS ota_proof_markers"); end'
+        - 'require "json"; transaction_id = ENV.fetch("OTA_PROOF_TRANSACTION_ID"); observation_id = ENV.fetch("OTA_PROOF_OBSERVATION_ID"); attestation_path = ENV.fetch("OTA_PROOF_ATTESTATION_FILE"); connection = ActiveRecord::Base.connection; begin; observed = connection.select_value("SELECT marker FROM ota_proof_markers ORDER BY marker LIMIT 1"); raise "Ota proof marker was not observed through PostgreSQL" if observed.nil? || observed.empty?; File.write(attestation_path, JSON.generate({transaction_id: transaction_id, observation_id: observation_id, marker: observed})); ensure; connection.execute("DROP TABLE IF EXISTS ota_proof_markers"); end'
     depends_on:
       - db:prepare
     requires_services:
@@ -576,6 +575,7 @@ workflows:
       seam_observations:
         - id: postgres-marker
           dependency: postgres
+          producer_task: proof:postgres-marker
           task: proof:postgres-marker-observe
           marker_env: OTA_PROOF_POSTGRES_MARKER
     exposes:

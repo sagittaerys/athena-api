@@ -190,6 +190,8 @@ jobs:
             and .proof_verdict == "passed"
             and (.seam_observations | length) == 1
             and .seam_observations[0].outcome == "observed"
+            and (.seam_observations[0].transaction_id | startswith("sha256:"))
+            and (.seam_observations[0].attestation_digest | startswith("sha256:"))
             and (.dependency_evidence | any(
               .dependency_id == "service:postgres"
               and .level == "exercised"

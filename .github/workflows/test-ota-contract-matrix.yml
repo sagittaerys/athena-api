@@ -187,7 +187,7 @@ jobs:
           ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json . > ota-proof-app-seam.json
           jq -e '
             .ok == true
-            and .proof_verdict == "passed"
+            and .proof_verdict == "passed_with_unproven_boundaries"
             and (.seam_observations | length) == 1
             and .seam_observations[0].outcome == "observed"
             and (.seam_observations[0].transaction_id | startswith("sha256:"))
@@ -213,6 +213,10 @@ jobs:
               .kind == "dependency_causality_not_proved"
               and .dependency_id == "service:postgres"
             )] | length) == 0
+            and ([.not_proved[]?.kind] | sort) == [
+              "broader_repo_completion_not_proved",
+              "external_network_path_not_proved"
+            ]
           ' ota-proof-app-seam.json
 
       - name: Upload app proof artifacts

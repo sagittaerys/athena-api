@@ -166,6 +166,10 @@ jobs:
         shell: bash
         run: ota up --workflow app --native --dry-run .
 
+      - name: Dry-run marker-bound app proof workflow
+        shell: bash
+        run: ota up --workflow app-proof --native --dry-run .
+
       - name: Execute verify workflow
         timeout-minutes: 90
         shell: bash
@@ -175,6 +179,28 @@ jobs:
         timeout-minutes: 60
         shell: bash
         run: ota proof runtime --workflow app --negative-control postgres-unavailable --native --json . > ota-proof-app.json
+
+      - name: Prove marker-bound PostgreSQL seam observation
+        timeout-minutes: 60
+        shell: bash
+        run: |
+          ota proof runtime --workflow app-proof --native --json . > ota-proof-app-seam.json
+          jq -e '
+            .ok == true
+            and .proof_verdict == "passed"
+            and (.seam_observations | length) == 1
+            and .seam_observations[0].outcome == "observed"
+            and (.dependency_evidence | any(
+              .dependency_id == "service:postgres"
+              and .level == "exercised"
+              and .observation.origin == "round_trip_effect"
+              and .observation.evidence_class == "attested"
+            ))
+            and ([.not_proved[]? | select(
+              .kind == "dependency_exercise_not_proved"
+              and .dependency_id == "service:postgres"
+            )] | length) == 0
+          ' ota-proof-app-seam.json
 
       - name: Upload app proof artifacts
         if: always()
@@ -186,6 +212,7 @@ jobs:
             ota-validate.json
             ota-execution-topology.json
             ota-proof-app.json
+            ota-proof-app-seam.json
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json
             .ota/proof/app/up.log

@@ -199,10 +199,13 @@ jobs:
               and .observation.evidence_class == "attested"
               and .negative_control.status == "validated"
               and .negative_control.same_obligation == true
+              and .negative_control.failure_mode == "expected_missing_effect"
               and (.negative_control.failure_attestation_digest | startswith("sha256:"))
             ))
             and .negative_control.status == "validated"
-            and .negative_control.outcome == "nonzero_exit_observed"
+            and .negative_control.outcome == "expected_obligation_failed"
+            and .negative_control.intervention.kind == "dependency_endpoint_override"
+            and .negative_control.failure_mode == "expected_missing_effect"
             and .negative_control.obligation_id == "postgres-marker"
             and (.negative_control.failure_attestation_digest | startswith("sha256:"))
             and ([.not_proved[]? | select(

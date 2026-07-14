@@ -585,6 +585,8 @@ workflows:
           dependency: postgres
           obligation: postgres-marker
           task: proof:postgres-unavailable
+          intervention:
+            kind: dependency_endpoint_override
           expected_failure: dependency_unavailable
     exposes:
       - surface: api

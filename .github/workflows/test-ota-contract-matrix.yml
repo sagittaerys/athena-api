@@ -511,15 +511,11 @@ jobs:
 
       - name: Execute container audit
         timeout-minutes: 60
-        continue-on-error: true
         shell: bash
         run: |
-          ota run security:audit --mode container --stream .
-          status=$?
-          if [ "$status" -ne 0 ]; then
+          if ! ota run security:audit --mode container --stream .; then
             echo "::warning title=Container audit is advisory in athena-api::security:audit uses the live ruby-advisory-db feed and can fail on newly published advisories even when the container execution surface itself is healthy. The matrix still proves the contract, hydration, dry-run, and other real container task lanes."
           fi
-          exit 0
 
       - name: Upload artifacts on failure
         if: failure()

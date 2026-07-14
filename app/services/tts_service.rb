@@ -5,7 +5,7 @@ class TtsService
   def self.clone_voice(audio_file_path)
     uri = URI("#{TTS_SERVER_URL}/clone/")
 
-    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https", read_timeout: 300, open_timeout: 30) do |http|
       request = Net::HTTP::Post.new(uri)
       request["x-secret-key"] = TTS_SECRET_KEY
 

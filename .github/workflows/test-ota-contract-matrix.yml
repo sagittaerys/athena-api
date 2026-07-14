@@ -150,6 +150,45 @@ jobs:
           ota tasks --safe --use .
           ota tasks --unsafe --use .
 
+      - name: Prove agent governance admission and refusal reconciliation
+        shell: bash
+        run: |
+          ota tasks --use --json . > ota-tasks.json
+          jq -e '
+            .tasks[]
+            | select(.name == "verify:static")
+            | .use.agent.callable == true
+            and .use.agent.command == "ota run verify:static --agent"
+          ' ota-tasks.json
+
+          ota run verify:static --agent --dry-run --json . > ota-agent-safe-preview.json
+          jq -e '
+            .ok == true
+            and .governance.evaluation.preflight.state == "allowed"
+            and .governance.evaluation.preflight.replay.status == "satisfied"
+            and .governance.evaluation.post_execution.state == "not_run"
+            and .governance.evaluation.post_execution.refusal_occurred == false
+          ' ota-agent-safe-preview.json
+
+          set +e
+          ota run verify --agent --dry-run --json . > ota-agent-refusal-preview.json
+          refusal_status=$?
+          set -e
+          test "$refusal_status" -eq 1
+          jq -e '
+            .ok == false
+            and .governance.evaluation.preflight.state == "refused"
+            and .governance.evaluation.preflight.refusal_reason_family == "requested_task_not_safe"
+            and .governance.evaluation.preflight.decision_basis[0].id == "refusal:requested_task_not_safe"
+            and .governance.evaluation.preflight.replay.status == "satisfied"
+            and .governance.evaluation.post_execution.state == "not_run"
+            and .governance.evaluation.post_execution.execution_attempted == false
+            and .governance.evaluation.post_execution.refusal_occurred == true
+            and .governance.evaluation.post_execution.refusal.reason_family == "requested_task_not_safe"
+            and .governance.evaluation.post_execution.not_run_reason == "preflight_refusal"
+            and .governance.evaluation.post_execution.replay.status == "satisfied"
+          ' ota-agent-refusal-preview.json
+
       - name: List workflows
         shell: bash
         run: ota workflows .
@@ -237,6 +276,9 @@ jobs:
           path: |
             ota-version.txt
             ota-validate.json
+            ota-tasks.json
+            ota-agent-safe-preview.json
+            ota-agent-refusal-preview.json
             ota-execution-topology.json
             ota-proof-app.json
             ota-proof-app-seam.json

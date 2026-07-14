@@ -216,8 +216,15 @@ jobs:
               .kind == "dependency_causality_not_proved"
               and .dependency_id == "service:postgres"
             )] | length) == 0
+            and ([.not_proved[]? | select(
+              .kind == "dependency_output_shaping_not_proved"
+              and .dependency_id == "service:postgres"
+              and .proof_obligation_id == "postgres-marker"
+              and .reason == "causal_evidence_scoped_to_declared_seam_obligation"
+            )] | length) == 1
             and ([.not_proved[]?.kind] | sort) == [
               "broader_repo_completion_not_proved",
+              "dependency_output_shaping_not_proved",
               "external_network_path_not_proved"
             ]
           ' ota-proof-app-seam.json

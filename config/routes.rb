@@ -10,27 +10,12 @@ Rails.application.routes.draw do
         delete :logout
       end
 
+      get "auth/me", to: "auth#me"
+
       resources :books, only: [ :index, :show ] do
         collection do
           get :genres
         end
-      end
-
-      resources :library_items, only: [ :index, :show, :create, :destroy ] do
-        member do
-          post :parse_epub
-        end
-      end
-
-      resources :library_items, only: [ :index, :show, :create, :destroy ]
-
-      resources :voice_profiles, only: [ :show, :create, :destroy ]
-
-      resources :library_items, only: [ :index, :show, :create, :destroy ] do
-        member do
-          post :parse_epub
-        end
-        resources :audio_chunks, only: [ :create, :show ]
       end
 
       resources :library_items, only: [ :index, :show, :create, :destroy ] do
@@ -43,8 +28,12 @@ Rails.application.routes.draw do
           end
         end
       end
+
+      resources :voice_profiles, only: [ :create, :show, :destroy ] do
+        collection do
+          get :current
+        end
+      end
     end
   end
 end
-
-# mann gotta love rails man...

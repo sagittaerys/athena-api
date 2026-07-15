@@ -66,6 +66,11 @@ module Api
         path
       end
 
+      def current
+        voice_profile = current_user.voice_profiles.order(created_at: :desc).first
+        render json: { voice_profile: voice_profile ? serialize(voice_profile) : nil }, status: :ok
+      end
+
       def serialize(voice_profile)
         {
           id: voice_profile.id,

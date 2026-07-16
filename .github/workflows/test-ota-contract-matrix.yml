@@ -225,7 +225,9 @@ jobs:
         run: |
           ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json . > ota-proof-app-seam.json
           jq -e '
-            .negative_control.failure_attestation_digest as $canonical_failure_attestation_digest
+            .seam_observations[0] as $seam_observation
+            | .negative_control as $canonical_negative_control
+            | $canonical_negative_control.failure_attestation_digest as $canonical_failure_attestation_digest
             | .ok == true
             and .proof_verdict == "passed_with_unproven_boundaries"
             and (.seam_observations | length) == 1
@@ -235,6 +237,7 @@ jobs:
             and (.dependency_evidence | any(
               .dependency_id == "service:postgres"
               and .level == "fault_tested"
+              and .proof_obligation_id == $canonical_negative_control.obligation_id
               and .observation.origin == "round_trip_effect"
               and .observation.evidence_class == "attested"
               and .negative_control.status == "validated"
@@ -248,6 +251,8 @@ jobs:
             and .negative_control.intervention.kind == "dependency_endpoint_override"
             and .negative_control.failure_mode == "expected_missing_effect"
             and .negative_control.obligation_id == "postgres-marker"
+            and .negative_control.obligation_id == $seam_observation.id
+            and .negative_control.transaction_id == $seam_observation.transaction_id
             and (.negative_control.failure_attestation_digest | startswith("sha256:"))
             and ([.not_proved[]? | select(
               .kind == "dependency_exercise_not_proved"

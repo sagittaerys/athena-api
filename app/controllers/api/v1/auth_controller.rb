@@ -36,6 +36,10 @@ module Api
         render json: { error: e.message }, status: :unauthorized
       end
 
+      def me
+        render json: { user: serialize_user(current_user) }, status: :ok
+      end
+
       def refresh
         result = AuthService.refresh(raw_token: params[:refresh_token])
 

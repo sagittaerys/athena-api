@@ -654,8 +654,8 @@ agent:
     ota:
       note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
       source:
-        kind: branch
-        branch: 1.6.24-implementation
+        kind: version
+        version: v1.6.24
   notes: |
     This contract intentionally scopes Athena API to the repo-visible Rails API surfaces:
     Bundler setup, PostgreSQL-backed development, CI-style lint/security/test checks, Solid Queue worker startup,

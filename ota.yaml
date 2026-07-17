@@ -518,13 +518,11 @@ tasks:
       The Dockerfile is documented as production-oriented, not a local development container path.
       This task proves image build planning without claiming compose or devcontainer support.
     category: build
-    command:
-      exe: docker
-      args:
-        - build
-        - -t
-        - athena-api:ota
-        - .
+    action:
+      kind: build_container_image
+      file: Dockerfile
+      context: .
+      tag: athena-api:ota
     requirements:
       tools:
         docker: "*"

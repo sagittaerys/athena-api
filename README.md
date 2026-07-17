@@ -123,14 +123,21 @@ The test suite covers models, services, jobs, and request specs across all endpo
 ## Ota
 
 This repo also ships an [`ota.yaml`](./ota.yaml) contract for deterministic setup, task execution,
-and CI/runtime proofing.
+CI/runtime proofing, and the production image build. Install Ota from the
+[official installation guide](https://ota.run/docs/install), then inspect the contract-owned
+surface before choosing a lane.
 
 ```bash
-# inspect readiness and contract health
+# validate the contract and inspect local readiness
+ota validate .
 ota doctor
 
-# prepare the native source-dev path
-ota up --workflow source-dev --native
+# list human and agent-safe task usage, modes, and dry-run commands
+ota tasks --use
+ota tasks --safe --use
+
+# prepare the native Rails runtime with PostgreSQL
+ota up --workflow app --native
 
 # start the Rails API
 ota run dev --native
@@ -138,14 +145,14 @@ ota run dev --native
 # in a separate terminal, start the job worker
 ota run worker --native
 
-# run the repo verification lane
-ota run verify:ci --native
-```
+# run the bounded native verification lane
+ota up --workflow verify-static --native
 
-If you only want to inspect the modeled task surface first:
+# run the same bounded verification lane in Ota's Ruby container context
+ota up --workflow verify-static --container
 
-```bash
-ota tasks --use
+# build the documented production image through the typed Ota action
+ota up --workflow image
 ```
 
 ---

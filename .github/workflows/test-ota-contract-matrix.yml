@@ -566,6 +566,11 @@ jobs:
             echo "::warning title=Container audit is advisory in athena-api::security:audit uses the live ruby-advisory-db feed and can fail on newly published advisories even when the container execution surface itself is healthy. The matrix still proves the contract, hydration, dry-run, and other real container task lanes."
           fi
 
+      - name: Build the production Docker image through Ota
+        timeout-minutes: 60
+        shell: bash
+        run: ota up --workflow image --stream .
+
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4

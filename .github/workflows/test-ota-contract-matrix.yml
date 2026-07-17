@@ -6,10 +6,14 @@ name: "Test: Ota contract matrix"
 on:
   workflow_dispatch:
     inputs:
-      ota_version:
-        description: Released Ota version to install for this matrix run
+      ota_source:
+        description: Ota install source selector (`contract`, released version like `v1.6.23`, exact git rev, or branch with `ota_git_branch`)
         required: false
-        default: v1.6.22
+        default: contract
+      ota_git_branch:
+        description: Optional Ota git branch when `ota_source` should install unreleased pressure truth from git
+        required: false
+        default: ""
   pull_request:
     paths:
       - "ota.yaml"
@@ -28,7 +32,8 @@ permissions:
 
 env:
   OTA_NO_UPDATE_CHECK: "1"
-  OTA_VERSION: ${{ github.event.inputs.ota_version || 'v1.6.22' }}
+  OTA_SOURCE: ${{ github.event.inputs.ota_source || 'contract' }}
+  OTA_GIT_BRANCH: ${{ github.event.inputs.ota_git_branch || '' }}
 
 jobs:
   native-ubuntu:
@@ -61,19 +66,47 @@ jobs:
         shell: bash
         run: sudo apt-get update && sudo apt-get install --no-install-recommends -y build-essential libpq-dev pkg-config
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install declared Ruby toolchain
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler: 2.5.3
+
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Assert ota minimum version from contract
@@ -123,6 +156,45 @@ jobs:
           ota tasks --safe --use .
           ota tasks --unsafe --use .
 
+      - name: Prove agent governance admission and refusal reconciliation
+        shell: bash
+        run: |
+          ota tasks --use --json . > ota-tasks.json
+          jq -e '
+            .tasks[]
+            | select(.name == "verify:static")
+            | .use.agent.callable == true
+            and .use.agent.command == "ota run verify:static --agent"
+          ' ota-tasks.json
+
+          ota run verify:static --agent --dry-run --json . > ota-agent-safe-preview.json
+          jq -e '
+            .ok == true
+            and .governance.evaluation.preflight.state == "allowed"
+            and .governance.evaluation.preflight.replay.status == "satisfied"
+            and .governance.evaluation.post_execution.state == "not_run"
+            and .governance.evaluation.post_execution.refusal_occurred == false
+          ' ota-agent-safe-preview.json
+
+          set +e
+          ota run verify --agent --dry-run --json . > ota-agent-refusal-preview.json
+          refusal_status=$?
+          set -e
+          test "$refusal_status" -eq 1
+          jq -e '
+            .ok == false
+            and .governance.evaluation.preflight.state == "refused"
+            and .governance.evaluation.preflight.refusal_reason_family == "requested_task_not_safe"
+            and .governance.evaluation.preflight.decision_basis[0].id == "refusal:requested_task_not_safe"
+            and .governance.evaluation.preflight.replay.status == "satisfied"
+            and .governance.evaluation.post_execution.state == "not_run"
+            and .governance.evaluation.post_execution.execution_attempted == false
+            and .governance.evaluation.post_execution.refusal_occurred == true
+            and .governance.evaluation.post_execution.refusal.reason_family == "requested_task_not_safe"
+            and .governance.evaluation.post_execution.not_run_reason == "preflight_refusal"
+            and .governance.evaluation.post_execution.replay.status == "satisfied"
+          ' ota-agent-refusal-preview.json
+
       - name: List workflows
         shell: bash
         run: ota workflows .
@@ -139,29 +211,96 @@ jobs:
         shell: bash
         run: ota up --workflow app --native --dry-run .
 
+      - name: Dry-run marker-bound app proof workflow
+        shell: bash
+        run: ota up --workflow app-proof --native --dry-run .
+
       - name: Execute verify workflow
         timeout-minutes: 90
         shell: bash
         run: ota up --workflow verify --native --stream .
 
-      - name: Proof app workflow
+      - name: Prove app workflow
         timeout-minutes: 60
         shell: bash
         run: ota proof runtime --workflow app --native --json . > ota-proof-app.json
 
-      - name: Upload artifacts on failure
-        if: failure()
+      - name: Prove marker-bound and fault-tested PostgreSQL seam
+        timeout-minutes: 60
+        shell: bash
+        run: |
+          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json . > ota-proof-app-seam.json
+          jq -e '
+            .seam_observations[0] as $seam_observation
+            | .negative_control as $canonical_negative_control
+            | $canonical_negative_control.failure_attestation_digest as $canonical_failure_attestation_digest
+            | .ok == true
+            and .proof_verdict == "passed_with_unproven_boundaries"
+            and (.seam_observations | length) == 1
+            and .seam_observations[0].outcome == "observed"
+            and (.seam_observations[0].transaction_id | startswith("sha256:"))
+            and (.seam_observations[0].attestation_digest | startswith("sha256:"))
+            and (.dependency_evidence | any(
+              .dependency_id == "service:postgres"
+              and .level == "fault_tested"
+              and .proof_obligation_id == $canonical_negative_control.obligation_id
+              and .observation.origin == "round_trip_effect"
+              and .observation.evidence_class == "attested"
+              and .negative_control.status == "validated"
+              and .negative_control.same_obligation == true
+              and .negative_control.failure_mode == "expected_missing_effect"
+              and (.negative_control.failure_attestation_digest | startswith("sha256:"))
+              and .negative_control.failure_attestation_digest == $canonical_failure_attestation_digest
+            ))
+            and .negative_control.status == "validated"
+            and .negative_control.outcome == "expected_obligation_failed"
+            and .negative_control.intervention.kind == "dependency_endpoint_override"
+            and .negative_control.failure_mode == "expected_missing_effect"
+            and .negative_control.obligation_id == "postgres-marker"
+            and .negative_control.obligation_id == $seam_observation.id
+            and .negative_control.transaction_id == $seam_observation.transaction_id
+            and (.negative_control.failure_attestation_digest | startswith("sha256:"))
+            and ([.not_proved[]? | select(
+              .kind == "dependency_exercise_not_proved"
+              and .dependency_id == "service:postgres"
+            )] | length) == 0
+            and ([.not_proved[]? | select(
+              .kind == "dependency_causality_not_proved"
+              and .dependency_id == "service:postgres"
+            )] | length) == 0
+            and ([.not_proved[]? | select(
+              .kind == "dependency_output_shaping_not_proved"
+              and .dependency_id == "service:postgres"
+              and .proof_obligation_id == "postgres-marker"
+              and .reason == "causal_evidence_scoped_to_declared_seam_obligation"
+            )] | length) == 1
+            and ([.not_proved[]?.kind] | sort) == [
+              "broader_repo_completion_not_proved",
+              "dependency_output_shaping_not_proved",
+              "external_network_path_not_proved"
+            ]
+          ' ota-proof-app-seam.json
+
+      - name: Upload app proof artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ota-contract-matrix-ubuntu-full
           path: |
             ota-version.txt
             ota-validate.json
+            ota-tasks.json
+            ota-agent-safe-preview.json
+            ota-agent-refusal-preview.json
             ota-execution-topology.json
             ota-proof-app.json
+            ota-proof-app-seam.json
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json
             .ota/proof/app/up.log
+            .ota/proof/app-proof/topology.json
+            .ota/proof/app-proof/doctor.json
+            .ota/proof/app-proof/up.log
 
   native-macos:
     name: Ota Contract Matrix (macos-full)
@@ -183,6 +322,7 @@ jobs:
       - name: Install native prerequisite packages
         shell: bash
         run: |
+          brew untap aws/tap || true
           brew install postgresql@16 pkg-config
           echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
           brew services start postgresql@16
@@ -195,19 +335,47 @@ jobs:
           createuser -s postgres || true
           psql postgres -c "ALTER USER postgres WITH PASSWORD 'ci-postgres-password';"
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install declared Ruby toolchain
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler: 2.5.3
+
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract
@@ -250,43 +418,90 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3.11'
           bundler-cache: false
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract
         shell: powershell
         run: ota validate .
 
-      - name: Doctor static verify workflow
+      - name: Assert doctor reports native static workflow unavailable on Windows
         shell: powershell
-        run: ota doctor --workflow verify-static .
+        run: |
+          $doctorOutput = & ota doctor --workflow verify-static --json .
+          $doctorExitCode = $LASTEXITCODE
+          if ($doctorExitCode -eq 0) {
+            throw "verify-static must be reported unavailable through the Linux/macOS ruby-host context on Windows"
+          }
+          $doctor = $doctorOutput | ConvertFrom-Json
+          $platformFinding = @($doctor.findings | Where-Object { $_.summary -like "Unsupported host platform*" })
+          if ($platformFinding.Count -eq 0) {
+            throw "expected host-platform refusal in doctor findings"
+          }
+          exit 0
 
-      - name: Dry-run static verify workflow
+      - name: Assert native static workflow is refused on Windows
         shell: powershell
-        run: ota up --workflow verify-static --native --dry-run .
-
-      - name: Execute static verify workflow
-        timeout-minutes: 90
-        shell: powershell
-        run: ota up --workflow verify-static --native --stream .
+        run: |
+          $previewOutput = & ota up --workflow verify-static --native --dry-run --json .
+          $previewExitCode = $LASTEXITCODE
+          if ($previewExitCode -eq 0) {
+            throw "verify-static must be unavailable through the Linux/macOS ruby-host context on Windows"
+          }
+          $preview = $previewOutput | ConvertFrom-Json
+          if ($preview.summary.primary_blocker.summary -notlike "Unsupported host platform*") {
+            throw "expected host-platform refusal, got: $($preview.summary.primary_blocker.summary)"
+          }
+          exit 0
 
       - name: Upload artifacts on failure
         if: failure()
@@ -307,19 +522,41 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ota (Unix)
-        if: runner.os != 'Windows'
+      - name: Install ota from contract
+        if: env.OTA_SOURCE == 'contract'
+        uses: ota-run/setup@v1.0.8
+        with:
+          source: contract
+          contract-path: ota.yaml
+
+      - name: Install ota from released version (Unix)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
         shell: bash
         run: |
-          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_VERSION}" sh
+          curl -fsSL https://dist.ota.run/install.sh | OTA_VERSION="${OTA_SOURCE}" sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ota (Windows)
-        if: runner.os == 'Windows'
+      - name: Install ota from released version (Windows)
+        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:OTA_VERSION = "${env:OTA_VERSION}"
+          $env:OTA_VERSION = "${env:OTA_SOURCE}"
           irm https://dist.ota.run/install.ps1 | iex
+          (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install ota from git branch (Unix)
+        if: env.OTA_GIT_BRANCH != '' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL https://dist.ota.run/install.sh | OTA_GIT_BRANCH="${OTA_GIT_BRANCH}" sh -s -- --from-git
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install ota from git branch (Windows)
+        if: env.OTA_GIT_BRANCH != '' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:OTA_GIT_BRANCH = "${env:OTA_GIT_BRANCH}"
+          & ([scriptblock]::Create((irm https://dist.ota.run/install.ps1))) -FromGit
           (Join-Path $env:LOCALAPPDATA "ota\\bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Validate contract
@@ -350,15 +587,16 @@ jobs:
 
       - name: Execute container audit
         timeout-minutes: 60
-        continue-on-error: true
         shell: bash
         run: |
-          ota run security:audit --mode container --stream .
-          status=$?
-          if [ "$status" -ne 0 ]; then
+          if ! ota run security:audit --mode container --stream .; then
             echo "::warning title=Container audit is advisory in athena-api::security:audit uses the live ruby-advisory-db feed and can fail on newly published advisories even when the container execution surface itself is healthy. The matrix still proves the contract, hydration, dry-run, and other real container task lanes."
           fi
-          exit 0
+
+      - name: Build the production Docker image through Ota
+        timeout-minutes: 60
+        shell: bash
+        run: ota up --workflow image --stream .
 
       - name: Upload artifacts on failure
         if: failure()

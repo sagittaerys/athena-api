@@ -5,7 +5,7 @@ project:
   type: application
 metadata:
   ota:
-    minimum_version: "1.6.22"
+    minimum_version: "1.6.24"
 execution:
   default_context: host
   contexts:
@@ -17,6 +17,9 @@ execution:
         - windows
     ruby-host:
       extends: host
+      only_on:
+        - linux
+        - macos
     app:
       backend: container
       lifecycle: ephemeral
@@ -189,6 +192,7 @@ tasks:
         - vendor/bundle
       network: true
       network_kind: dependency_hydration
+    safe_for_agent: true
   db:prepare:
     context: ruby-host
     description: Prepare the Rails development database and Solid Queue schema
@@ -209,6 +213,8 @@ tasks:
         - log
         - tmp
         - storage
+      network: true
+      network_kind: integration_test
       external_state:
         - postgres
     internal: true
@@ -218,7 +224,11 @@ tasks:
     notes: |
       This maps to the GitHub Actions lint job and uses the repo binstub.
     category: test
-    run: bin/rubocop -f github
+    command:
+      exe: bin/rubocop
+      args:
+        - -f
+        - github
     execution:
       default_mode: native
       modes:
@@ -241,7 +251,12 @@ tasks:
     notes: |
       This maps to the GitHub Actions security scan using the repository ignore config.
     category: test
-    run: bin/brakeman --no-pager --ignore-config config/brakeman.ignore
+    command:
+      exe: bin/brakeman
+      args:
+        - --no-pager
+        - --ignore-config
+        - config/brakeman.ignore
     execution:
       default_mode: native
       modes:
@@ -260,7 +275,8 @@ tasks:
       This maps to the GitHub Actions vulnerable-gem scan and uses the repo wrapper so
       the audit config stays contract-owned instead of bypassed by a raw gem entrypoint.
     category: test
-    run: bin/bundler-audit
+    command:
+      exe: bin/bundler-audit
     execution:
       default_mode: native
       modes:
@@ -305,6 +321,108 @@ tasks:
         - tmp
         - storage
         - spec
+      network: true
+      network_kind: integration_test
+      external_state:
+        - postgres
+  proof:postgres-unavailable:
+    context: ruby-host
+    description: Prove the Rails database seam fails when the declared PostgreSQL endpoint is unavailable
+    notes: |
+      This is an explicit V11.11 negative control for the app runtime proof. It uses the same
+      Rails database connection path as the application but redirects only this finite control
+      to an unreachable loopback port. It writes Ota's transaction-bound failure attestation only
+      after Rails reports that PostgreSQL is unavailable; any other non-zero exit remains invalid
+      control evidence. This task is intentionally outside the normal app workflow closure.
+    category: test
+    command:
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - runner
+        - 'require "json"; transaction_id = ENV.fetch("OTA_PROOF_TRANSACTION_ID"); control_id = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_ID"); obligation_id = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_OBLIGATION"); attestation_path = ENV.fetch("OTA_PROOF_NEGATIVE_CONTROL_ATTESTATION_FILE"); begin; ActiveRecord::Base.connection.execute("SELECT 1"); raise "Ota negative control unexpectedly reached PostgreSQL"; rescue StandardError => error; unavailable = error.is_a?(ActiveRecord::ConnectionNotEstablished) || (defined?(PG::ConnectionBad) && error.is_a?(PG::ConnectionBad)); raise unless unavailable; File.write(attestation_path, JSON.generate({transaction_id: transaction_id, control_id: control_id, obligation_id: obligation_id, failure_kind: "dependency_unavailable"})); warn(error.message); exit 1; end'
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:ci-postgres-password@127.0.0.1:1/athena_api_test
+      DB_USERNAME: postgres
+      DB_PASSWORD: ci-postgres-password
+      DB_HOST: 127.0.0.1
+      DB_PORT: "1"
+      SECRET_KEY_BASE: a_very_long_test_secret_key_that_is_at_least_64_characters_long_for_ci
+    depends_on:
+      - install
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+      network: true
+      network_kind: integration_test
+      external_state:
+        - postgres
+  proof:postgres-marker:
+    context: ruby-host
+    description: Write the runner-issued PostgreSQL seam marker before runtime proof
+    notes: |
+      This is proof-only setup for the `app-proof` workflow. Ota injects an opaque marker for
+      each proof transaction; this task writes that exact marker through Rails so the separate
+      post-readiness observer can prove the declared PostgreSQL seam was exercised.
+    category: setup
+    command:
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - runner
+        - 'marker = ENV.fetch("OTA_PROOF_POSTGRES_MARKER"); connection = ActiveRecord::Base.connection; connection.execute("CREATE TABLE IF NOT EXISTS ota_proof_markers (marker text PRIMARY KEY)"); connection.execute("INSERT INTO ota_proof_markers (marker) VALUES (#{connection.quote(marker)}) ON CONFLICT (marker) DO NOTHING")'
+    depends_on:
+      - db:prepare
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+      network: true
+      network_kind: integration_test
+      external_state:
+        - postgres
+    internal: true
+  proof:postgres-marker-observe:
+    context: ruby-host
+    description: Confirm the runner-issued marker is visible through the PostgreSQL seam
+    notes: |
+      This finite observer is intentionally outside the normal `app-proof` workflow closure.
+      Ota does not give this task the opaque marker. It must recover the marker from PostgreSQL,
+      then write the runner-owned transaction attestation before teardown. Its ensure block drops
+      the proof-only table even when marker observation fails.
+    category: test
+    command:
+      exe: bundle
+      args:
+        - exec
+        - rails
+        - runner
+        - 'require "json"; transaction_id = ENV.fetch("OTA_PROOF_TRANSACTION_ID"); observation_id = ENV.fetch("OTA_PROOF_OBSERVATION_ID"); attestation_path = ENV.fetch("OTA_PROOF_ATTESTATION_FILE"); connection = ActiveRecord::Base.connection; begin; observed = connection.select_value("SELECT marker FROM ota_proof_markers ORDER BY marker LIMIT 1"); raise "Ota proof marker was not observed through PostgreSQL" if observed.nil? || observed.empty?; File.write(attestation_path, JSON.generate({transaction_id: transaction_id, observation_id: observation_id, marker: observed})); ensure; connection.execute("DROP TABLE IF EXISTS ota_proof_markers"); end'
+    depends_on:
+      - db:prepare
+    requires_services:
+      - postgres
+    requirements:
+      toolchains:
+        - ruby
+    effects:
+      writes:
+        - log
+        - tmp
+      network: true
+      network_kind: integration_test
       external_state:
         - postgres
   verify:static:
@@ -343,10 +461,9 @@ tasks:
         - exec
         - rails
         - server
-        - -b
-        - 0.0.0.0
-        - -p
-        - "3000"
+      runtime_projection:
+        listener: api
+        adapter: rails
     depends_on:
       - db:prepare
     requires_services:
@@ -401,7 +518,11 @@ tasks:
       The Dockerfile is documented as production-oriented, not a local development container path.
       This task proves image build planning without claiming compose or devcontainer support.
     category: build
-    run: docker build -t athena-api:ota .
+    action:
+      kind: build_container_image
+      file: Dockerfile
+      context: .
+      tag: athena-api:ota
     requirements:
       tools:
         docker: "*"
@@ -439,6 +560,35 @@ workflows:
         - api
     exposes:
       - surface: api
+  app-proof:
+    intent: local_development
+    description: Rails API runtime proof with a marker-bound PostgreSQL seam observation
+    prepare:
+      task: setup:env
+    setup:
+      task: proof:postgres-marker
+    run:
+      task: dev
+    readiness:
+      surfaces:
+        - api
+    proof:
+      seam_observations:
+        - id: postgres-marker
+          dependency: postgres
+          producer_task: proof:postgres-marker
+          task: proof:postgres-marker-observe
+          marker_env: OTA_PROOF_POSTGRES_MARKER
+      negative_controls:
+        - id: postgres-unavailable
+          dependency: postgres
+          obligation: postgres-marker
+          task: proof:postgres-unavailable
+          intervention:
+            kind: dependency_endpoint_override
+          expected_failure: dependency_unavailable
+    exposes:
+      - surface: api
   worker:
     intent: local_development
     description: Solid Queue worker workflow for async jobs
@@ -467,6 +617,7 @@ agent:
   entrypoint: install
   default_task: verify:static
   safe_tasks:
+    - install
     - lint
     - security:brakeman
     - security:audit
@@ -504,13 +655,13 @@ agent:
       note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
       source:
         kind: version
-        version: v1.6.22
+        version: v1.6.24
   notes: |
     This contract intentionally scopes Athena API to the repo-visible Rails API surfaces:
     Bundler setup, PostgreSQL-backed development, CI-style lint/security/test checks, Solid Queue worker startup,
     and the documented production Docker image build.
-    This repo targets the released Ota 1.6.22 surface, so keep bootstrap and CI install truth
-    aligned with that released version instead of drifting onto older binaries.
+    This active pressure branch tracks Ota 1.6.24 implementation work through the canonical
+    bootstrap source so CI and contract execution test the same unreleased binary.
     Use `ota tasks --safe --use` before running agent work to see the approved safe task surface.
     Use `ota run verify:static` after normal code changes; it is the default agent verification path.
     Use `ota run verify` when you intentionally want the full PostgreSQL-backed CI-style validation path.

@@ -306,21 +306,25 @@ jobs:
           ota doctor --json . > "$OTA_ARTIFACT_DIR/ota-doctor-proof-claim.json"
           doctor_status=$?
           set -e
-          if [ "$doctor_status" -ne 0 ] && [ "$doctor_status" -ne 1 ]; then
-            exit "$doctor_status"
+          if [ "$doctor_status" -ne 1 ]; then
+            echo "expected Doctor to report the stopped proof runtime as not ready, got exit $doctor_status" >&2
+            exit 1
           fi
           jq -e '
-            .claim_assurance
-            | any(
-              .subject.kind == "workflow"
-              and .subject.name == "app-proof"
-              and .family == "proof_breadth"
-              and .assurance.status == "supported"
-              and (.assurance.coverage | index("immutable_proof_archive") != null)
-              and (.assurance.evidence | any(
-                .source == ".ota/proof/archives"
-                and .evidence_class == "attested"
-              ))
+            .summary.primary_blocker.code == "OTA_WORKFLOW_SURFACE_READINESS_FAILED"
+            and (
+              .claim_assurance
+              | any(
+                .subject.kind == "workflow"
+                and .subject.name == "app-proof"
+                and .family == "proof_breadth"
+                and .assurance.status == "supported"
+                and (.assurance.coverage | index("immutable_proof_archive") != null)
+                and (.assurance.evidence | any(
+                  .source == ".ota/proof/archives"
+                  and .evidence_class == "attested"
+                ))
+              )
             )
           ' "$OTA_ARTIFACT_DIR/ota-doctor-proof-claim.json"
 

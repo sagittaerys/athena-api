@@ -300,7 +300,15 @@ jobs:
       - name: Assert archived proof supports declared proof breadth
         shell: bash
         run: |
+          # The proof task has ended, so Doctor correctly reports the stopped runtime surface.
+          # The claim assurance remains independently consumable from its JSON output.
+          set +e
           ota doctor --json . > "$OTA_ARTIFACT_DIR/ota-doctor-proof-claim.json"
+          doctor_status=$?
+          set -e
+          if [ "$doctor_status" -ne 0 ] && [ "$doctor_status" -ne 1 ]; then
+            exit "$doctor_status"
+          fi
           jq -e '
             .claim_assurance
             | any(

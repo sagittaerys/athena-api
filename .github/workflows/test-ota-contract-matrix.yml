@@ -229,7 +229,7 @@ jobs:
         timeout-minutes: 60
         shell: bash
         run: |
-          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json . > ota-proof-app-seam.json
+          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json --archive . > ota-proof-app-seam.json
           jq -e '
             .seam_observations[0] as $seam_observation
             | .negative_control as $canonical_negative_control
@@ -281,6 +281,25 @@ jobs:
             ]
           ' ota-proof-app-seam.json
 
+      - name: Assert archived proof supports declared proof breadth
+        shell: bash
+        run: |
+          ota doctor --json . > ota-doctor-proof-claim.json
+          jq -e '
+            .claim_assurance
+            | any(
+              .subject.kind == "workflow"
+              and .subject.name == "app-proof"
+              and .family == "proof_breadth"
+              and .assurance.status == "supported"
+              and (.assurance.coverage | index("immutable_proof_archive") != null)
+              and (.assurance.evidence | any(
+                .source == ".ota/proof/archives"
+                and .evidence_class == "attested"
+              ))
+            )
+          ' ota-doctor-proof-claim.json
+
       - name: Upload app proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -295,6 +314,7 @@ jobs:
             ota-execution-topology.json
             ota-proof-app.json
             ota-proof-app-seam.json
+            ota-doctor-proof-claim.json
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json
             .ota/proof/app/up.log

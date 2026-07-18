@@ -654,13 +654,13 @@ agent:
     ota:
       note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
       source:
-        kind: version
-        version: v1.6.24
+        kind: branch
+        branch: 1.6.25-implementation
   notes: |
     This contract intentionally scopes Athena API to the repo-visible Rails API surfaces:
     Bundler setup, PostgreSQL-backed development, CI-style lint/security/test checks, Solid Queue worker startup,
     and the documented production Docker image build.
-    This active pressure branch tracks Ota 1.6.24 implementation work through the canonical
+    This active pressure branch tracks Ota 1.6.25 implementation work through the canonical
     bootstrap source so CI and contract execution test the same unreleased binary.
     Use `ota tasks --safe --use` before running agent work to see the approved safe task surface.
     Use `ota run verify:static` after normal code changes; it is the default agent verification path.

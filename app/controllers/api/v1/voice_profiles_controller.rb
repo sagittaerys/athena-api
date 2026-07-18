@@ -44,6 +44,10 @@ module Api
           render json: { error: "Voice cloning failed" }, status: :internal_server_error
         end
       end
+      def current
+        voice_profile = current_user.voice_profiles.order(created_at: :desc).first
+        render json: { voice_profile: voice_profile ? serialize(voice_profile) : nil }, status: :ok
+      end
 
       def destroy
         voice_profile = current_user.voice_profiles.find_by(id: params[:id])
@@ -66,10 +70,6 @@ module Api
         path
       end
 
-      def current
-        voice_profile = current_user.voice_profiles.order(created_at: :desc).first
-        render json: { voice_profile: voice_profile ? serialize(voice_profile) : nil }, status: :ok
-      end
 
       def serialize(voice_profile)
         {

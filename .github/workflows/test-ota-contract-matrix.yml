@@ -201,6 +201,31 @@ jobs:
             and .governance.evaluation.post_execution.replay.status == "satisfied"
           ' "$OTA_ARTIFACT_DIR/ota-agent-refusal-preview.json"
 
+      - name: Prove task and workflow refusal canaries
+        shell: bash
+        run: |
+          ota run --agent --expect-refusal --json verify . > "$OTA_ARTIFACT_DIR/ota-task-refusal-canary.json"
+          jq -e '
+            .ok == true
+            and .status == "refused_as_expected"
+            and .canary.kind == "task"
+            and .canary.target == "verify"
+            and .canary.execution_started == false
+            and .canary.refusal.reason_family == "requested_task_not_safe"
+            and .receipt.ok == false
+          ' "$OTA_ARTIFACT_DIR/ota-task-refusal-canary.json"
+
+          ota up --agent --expect-refusal --workflow app --json . > "$OTA_ARTIFACT_DIR/ota-workflow-refusal-canary.json"
+          jq -e '
+            .ok == true
+            and .status == "refused_as_expected"
+            and .canary.kind == "workflow"
+            and .canary.target == "app"
+            and .canary.execution_started == false
+            and .canary.refusal.reason_family == "requested_task_not_safe"
+            and .receipt.ok == false
+          ' "$OTA_ARTIFACT_DIR/ota-workflow-refusal-canary.json"
+
       - name: List workflows
         shell: bash
         run: ota workflows .

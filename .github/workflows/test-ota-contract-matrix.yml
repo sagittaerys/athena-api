@@ -438,15 +438,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install ota from contract
-        if: env.OTA_SOURCE == 'contract'
-        uses: ota-run/setup@v1.0.8
-        with:
-          source: contract
-          contract-path: ota.yaml
-
-      - name: Install ota from released version (Unix)
-        if: env.OTA_SOURCE != 'contract' && env.OTA_GIT_BRANCH == '' && runner.os != 'Windows'
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:

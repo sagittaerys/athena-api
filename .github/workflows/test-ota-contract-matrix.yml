@@ -40,6 +40,8 @@ jobs:
     name: Ota Contract Matrix (ubuntu-full)
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      OTA_ARTIFACT_DIR: tmp/ota-contract-matrix
     services:
       postgres:
         image: postgres
@@ -55,6 +57,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Prepare Ota matrix artifacts
+        shell: bash
+        run: mkdir -p "$OTA_ARTIFACT_DIR"
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -112,13 +118,13 @@ jobs:
       - name: Assert ota minimum version from contract
         shell: bash
         run: |
-          ota --version | tee ota-version.txt
+          ota --version | tee "$OTA_ARTIFACT_DIR/ota-version.txt"
           required="$(awk -F'\"' '/minimum_version:/{print $2; exit}' ota.yaml)"
           if [ -z "$required" ]; then
             echo "missing metadata.ota.minimum_version in ota.yaml"
             exit 1
           fi
-          python3 - "$required" "$(cat ota-version.txt)" <<'PY'
+          python3 - "$required" "$(cat "$OTA_ARTIFACT_DIR/ota-version.txt")" <<'PY'
           import re
           import sys
 
@@ -142,7 +148,7 @@ jobs:
       - name: Validate contract
         shell: bash
         run: |
-          ota validate --json . > ota-validate.json
+          ota validate --json . > "$OTA_ARTIFACT_DIR/ota-validate.json"
           ota validate .
 
       - name: Doctor verify workflow
@@ -159,25 +165,25 @@ jobs:
       - name: Prove agent governance admission and refusal reconciliation
         shell: bash
         run: |
-          ota tasks --use --json . > ota-tasks.json
+          ota tasks --use --json . > "$OTA_ARTIFACT_DIR/ota-tasks.json"
           jq -e '
             .tasks[]
             | select(.name == "verify:static")
             | .use.agent.callable == true
             and .use.agent.command == "ota run verify:static --agent"
-          ' ota-tasks.json
+          ' "$OTA_ARTIFACT_DIR/ota-tasks.json"
 
-          ota run verify:static --agent --dry-run --json . > ota-agent-safe-preview.json
+          ota run verify:static --agent --dry-run --json . > "$OTA_ARTIFACT_DIR/ota-agent-safe-preview.json"
           jq -e '
             .ok == true
             and .governance.evaluation.preflight.state == "allowed"
             and .governance.evaluation.preflight.replay.status == "satisfied"
             and .governance.evaluation.post_execution.state == "not_run"
             and .governance.evaluation.post_execution.refusal_occurred == false
-          ' ota-agent-safe-preview.json
+          ' "$OTA_ARTIFACT_DIR/ota-agent-safe-preview.json"
 
           set +e
-          ota run verify --agent --dry-run --json . > ota-agent-refusal-preview.json
+          ota run verify --agent --dry-run --json . > "$OTA_ARTIFACT_DIR/ota-agent-refusal-preview.json"
           refusal_status=$?
           set -e
           test "$refusal_status" -eq 1
@@ -193,7 +199,7 @@ jobs:
             and .governance.evaluation.post_execution.refusal.reason_family == "requested_task_not_safe"
             and .governance.evaluation.post_execution.not_run_reason == "preflight_refusal"
             and .governance.evaluation.post_execution.replay.status == "satisfied"
-          ' ota-agent-refusal-preview.json
+          ' "$OTA_ARTIFACT_DIR/ota-agent-refusal-preview.json"
 
       - name: List workflows
         shell: bash
@@ -201,7 +207,7 @@ jobs:
 
       - name: Export execution topology
         shell: bash
-        run: ota execution topology --json . > ota-execution-topology.json
+        run: ota execution topology --json . > "$OTA_ARTIFACT_DIR/ota-execution-topology.json"
 
       - name: Dry-run verify workflow
         shell: bash
@@ -223,13 +229,13 @@ jobs:
       - name: Prove app workflow
         timeout-minutes: 60
         shell: bash
-        run: ota proof runtime --workflow app --native --json . > ota-proof-app.json
+        run: ota proof runtime --workflow app --native --json . > "$OTA_ARTIFACT_DIR/ota-proof-app.json"
 
       - name: Prove marker-bound and fault-tested PostgreSQL seam
         timeout-minutes: 60
         shell: bash
         run: |
-          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json --archive . > ota-proof-app-seam.json
+          ota proof runtime --workflow app-proof --negative-control postgres-unavailable --native --json --archive . > "$OTA_ARTIFACT_DIR/ota-proof-app-seam.json"
           jq -e '
             .seam_observations[0] as $seam_observation
             | .negative_control as $canonical_negative_control
@@ -279,22 +285,22 @@ jobs:
               "dependency_output_shaping_not_proved",
               "external_network_path_not_proved"
             ]
-          ' ota-proof-app-seam.json
+          ' "$OTA_ARTIFACT_DIR/ota-proof-app-seam.json"
 
       - name: Assert proof left declared source unchanged
         shell: bash
         run: |
-          git status --porcelain=v1 > ota-proof-source-status.txt
-          if [ -s ota-proof-source-status.txt ]; then
+          git status --porcelain=v1 > "$OTA_ARTIFACT_DIR/ota-proof-source-status.txt"
+          if [ -s "$OTA_ARTIFACT_DIR/ota-proof-source-status.txt" ]; then
             echo "Runtime proof changed tracked or unignored source after its archive was recorded:" >&2
-            cat ota-proof-source-status.txt >&2
+            cat "$OTA_ARTIFACT_DIR/ota-proof-source-status.txt" >&2
             exit 1
           fi
 
       - name: Assert archived proof supports declared proof breadth
         shell: bash
         run: |
-          ota doctor --json . > ota-doctor-proof-claim.json
+          ota doctor --json . > "$OTA_ARTIFACT_DIR/ota-doctor-proof-claim.json"
           jq -e '
             .claim_assurance
             | any(
@@ -308,7 +314,7 @@ jobs:
                 and .evidence_class == "attested"
               ))
             )
-          ' ota-doctor-proof-claim.json
+          ' "$OTA_ARTIFACT_DIR/ota-doctor-proof-claim.json"
 
       - name: Upload app proof artifacts
         if: always()
@@ -316,16 +322,7 @@ jobs:
         with:
           name: ota-contract-matrix-ubuntu-full
           path: |
-            ota-version.txt
-            ota-validate.json
-            ota-tasks.json
-            ota-agent-safe-preview.json
-            ota-agent-refusal-preview.json
-            ota-execution-topology.json
-            ota-proof-app.json
-            ota-proof-app-seam.json
-            ota-proof-source-status.txt
-            ota-doctor-proof-claim.json
+            ${{ env.OTA_ARTIFACT_DIR }}
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json
             .ota/proof/app/up.log

@@ -281,6 +281,16 @@ jobs:
             ]
           ' ota-proof-app-seam.json
 
+      - name: Assert proof left declared source unchanged
+        shell: bash
+        run: |
+          git status --porcelain=v1 > ota-proof-source-status.txt
+          if [ -s ota-proof-source-status.txt ]; then
+            echo "Runtime proof changed tracked or unignored source after its archive was recorded:" >&2
+            cat ota-proof-source-status.txt >&2
+            exit 1
+          fi
+
       - name: Assert archived proof supports declared proof breadth
         shell: bash
         run: |
@@ -314,6 +324,7 @@ jobs:
             ota-execution-topology.json
             ota-proof-app.json
             ota-proof-app-seam.json
+            ota-proof-source-status.txt
             ota-doctor-proof-claim.json
             .ota/proof/app/topology.json
             .ota/proof/app/doctor.json

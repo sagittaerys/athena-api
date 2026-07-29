@@ -1,12 +1,9 @@
-# Copyright (C) 2026 - 2026, Ota. All Rights Reserved.
-# Licensed under the Apache License, Version 2.0. See LICENSE for the full license text.
-
 name: Ota governance
 
 on:
   push:
     branches:
-      - bobai/athena-api-ota-readiness
+      - bobai/athena-ota-v1.6.25
   pull_request:
     paths:
       - ota.yaml
@@ -22,13 +19,13 @@ jobs:
   verify-static-native-linux:
     uses: ./.github/workflows/ota-verify-static-native-linux.yml
     with:
-      ota_projection_identity: sha256:5c83ae6f8b86ea06f28ecb31525cbc48105b307529d6a34b1f955d01dd0102f9
+      ota_projection_identity: sha256:580f408010a359b307c7cb7bd7dcd4bcff9440ddd094c5055d90dd47160e3836
       ota_target_os: linux
       ota_runner: ubuntu-latest
 
   verify-static-container-linux:
     uses: ./.github/workflows/ota-verify-static-container-linux.yml
     with:
-      ota_projection_identity: sha256:f81b158f7efad00a362b6ddc566521df222e1deb72273792293e7e81cf063466
+      ota_projection_identity: sha256:6650da418be90230c98c58cfea6b2bb83cdcd0fc257327a5107f6dd75382d6c5
       ota_target_os: linux
       ota_runner: ubuntu-latest

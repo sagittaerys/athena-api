@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       ota_source:
-        description: Ota install source selector (`contract`, released version like `v1.6.23`, exact git rev, or branch with `ota_git_branch`)
+        description: Ota install source selector (`contract`, released version like `v1.6.25`, exact git rev, or branch with `ota_git_branch`)
         required: false
         default: contract
       ota_git_branch:
@@ -80,7 +80,7 @@ jobs:
 
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
-        uses: ota-run/setup@v1.0.8
+        uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f # v1.0.9
         with:
           source: contract
           contract-path: ota.yaml
@@ -408,7 +408,7 @@ jobs:
 
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
-        uses: ota-run/setup@v1.0.8
+        uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f # v1.0.9
         with:
           source: contract
           contract-path: ota.yaml
@@ -491,7 +491,7 @@ jobs:
 
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
-        uses: ota-run/setup@v1.0.8
+        uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f # v1.0.9
         with:
           source: contract
           contract-path: ota.yaml
@@ -580,7 +580,7 @@ jobs:
 
       - name: Install ota from contract
         if: env.OTA_SOURCE == 'contract'
-        uses: ota-run/setup@v1.0.8
+        uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f # v1.0.9
         with:
           source: contract
           contract-path: ota.yaml

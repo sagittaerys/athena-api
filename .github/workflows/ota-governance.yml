@@ -3,7 +3,7 @@ name: Ota governance
 on:
   push:
     branches:
-      - bobai/athena-ota-v1.6.25
+      - main
   pull_request:
     paths:
       - ota.yaml

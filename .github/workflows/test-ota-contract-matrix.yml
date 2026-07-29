@@ -548,14 +548,14 @@ jobs:
       - name: Assert native static workflow is refused on Windows
         shell: powershell
         run: |
-          $previewOutput = & ota up --workflow verify-static --native --dry-run --json .
+          $previewOutput = & ota up --workflow verify-static --mode native --dry-run --json .
           $previewExitCode = $LASTEXITCODE
           if ($previewExitCode -eq 0) {
             throw "verify-static must be unavailable through the Linux/macOS ruby-host context on Windows"
           }
           $preview = $previewOutput | ConvertFrom-Json
-          if ($preview.summary.primary_blocker.summary -notlike "Unsupported host platform*") {
-            throw "expected host-platform refusal, got: $($preview.summary.primary_blocker.summary)"
+          if ($preview.summary.primary_blocker.code -ne "OTA_EXECUTION_OPTION_UNSUPPORTED_MODE") {
+            throw "expected unsupported-mode refusal, got: $($preview.summary.primary_blocker.code)"
           }
           exit 0
 

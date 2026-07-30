@@ -1,0 +1,31 @@
+name: Ota governance
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - ota.yaml
+      - .github/workflows/ota-governance.yml
+      - .github/workflows/ota-verify-static-native-linux.yml
+      - .github/workflows/ota-verify-static-container-linux.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-static-native-linux:
+    uses: ./.github/workflows/ota-verify-static-native-linux.yml
+    with:
+      ota_projection_identity: sha256:580f408010a359b307c7cb7bd7dcd4bcff9440ddd094c5055d90dd47160e3836
+      ota_target_os: linux
+      ota_runner: ubuntu-latest
+
+  verify-static-container-linux:
+    uses: ./.github/workflows/ota-verify-static-container-linux.yml
+    with:
+      ota_projection_identity: sha256:6650da418be90230c98c58cfea6b2bb83cdcd0fc257327a5107f6dd75382d6c5
+      ota_target_os: linux
+      ota_runner: ubuntu-latest

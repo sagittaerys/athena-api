@@ -5,7 +5,7 @@ project:
   type: application
 metadata:
   ota:
-    minimum_version: "1.6.24"
+    minimum_version: "1.6.25"
 execution:
   default_context: host
   contexts:
@@ -622,6 +622,9 @@ agent:
     - security:brakeman
     - security:audit
     - verify:static
+  refusal_canaries:
+    - task: verify
+    - workflow: app
   verify_after_changes:
     - verify:static
   writable_paths:
@@ -655,15 +658,17 @@ agent:
       note: Install ota when missing so contributors and agents can run the readiness workflows declared in this contract.
       source:
         kind: version
-        version: v1.6.24
+        version: v1.6.25
   notes: |
     This contract intentionally scopes Athena API to the repo-visible Rails API surfaces:
     Bundler setup, PostgreSQL-backed development, CI-style lint/security/test checks, Solid Queue worker startup,
     and the documented production Docker image build.
-    This active pressure branch tracks Ota 1.6.24 implementation work through the canonical
-    bootstrap source so CI and contract execution test the same unreleased binary.
+    The canonical bootstrap source pins released Ota v1.6.25 so CI and contract execution use
+    the same published binary.
     Use `ota tasks --safe --use` before running agent work to see the approved safe task surface.
     Use `ota run verify:static` after normal code changes; it is the default agent verification path.
     Use `ota run verify` when you intentionally want the full PostgreSQL-backed CI-style validation path.
+    `verify` and the `app` workflow are refusal canaries: `ota run --agent --expect-refusal verify`
+    and `ota up --agent --expect-refusal --workflow app` must remain blocked by the agent-safety closure.
     Use `ota up --workflow app` for the local API runtime and `ota up --workflow worker` for Solid Queue.
     Do not edit `.env` directly through agent-safe tasks; `setup:env` creates it idempotently when a local runtime path needs it.

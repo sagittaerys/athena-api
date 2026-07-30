@@ -137,19 +137,19 @@ ota tasks --use
 ota tasks --safe --use
 
 # prepare the native Rails runtime with PostgreSQL
-ota up --workflow app --native
+ota up --workflow app --mode native
 
 # start the Rails API
-ota run dev --native
+ota run dev --mode native
 
 # in a separate terminal, start the job worker
-ota run worker --native
+ota run worker --mode native
 
 # run the bounded native verification lane
-ota up --workflow verify-static --native
+ota up --workflow verify-static --mode native
 
 # run the same bounded verification lane in Ota's Ruby container context
-ota up --workflow verify-static --container
+ota up --workflow verify-static --mode container
 
 # build the documented production image through the typed Ota action
 ota up --workflow image

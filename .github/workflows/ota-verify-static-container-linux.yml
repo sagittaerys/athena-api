@@ -24,7 +24,7 @@ jobs:
     runs-on: ${{ inputs.ota_runner }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: ota-run/setup@493cba84bf7f7c11c9e8e996d832d93a89c62184
+      - uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f
         with:
           source: contract
       - name: Verify Ota projection identity
@@ -46,7 +46,7 @@ jobs:
     runs-on: ${{ inputs.ota_runner }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: ota-run/setup@493cba84bf7f7c11c9e8e996d832d93a89c62184
+      - uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f
         with:
           source: contract
       - name: Verify Ota projection identity
@@ -58,7 +58,7 @@ jobs:
     runs-on: ${{ inputs.ota_runner }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: ota-run/setup@493cba84bf7f7c11c9e8e996d832d93a89c62184
+      - uses: ota-run/setup@85bf49c11a5aa3ddedfa56c47682cfd40b238f1f
         with:
           source: contract
       - name: Verify Ota projection identity
